@@ -8,7 +8,10 @@
   every call ended with the misleading warning "ID type not matched". The
   database is now taken from the package namespace, so it need not be attached
   either, and an `OrgDb` object is accepted as well as its name. The same fix
-  applies to the BSgenome lookup of `getBmMatrix()`. (2026-10-23, Fri)
+  applies to the BSgenome lookup of `getBmMatrix()`, which also no longer drops
+  genomes whose organism starts with B or S (`Scerevisiae`): its pattern
+  `"^[^BSgenome]"` was a character class, not "does not start with BSgenome".
+  (2026-10-23, Fri)
 + `annotateSeq()` keeps `annotation`, `geneChr/geneStart/geneEnd`, `geneId` and
   `transcriptId` consistent with each other at transcript level (issue #252 of
   ChIPseeker). The transcript id of an exon/intron/UTR hit was taken from
