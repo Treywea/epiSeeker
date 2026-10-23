@@ -1046,12 +1046,12 @@ loadBSgenome <- function(BSgenome) {
         ## get the object from BSgenome
         BSgenome_name <- attr(BSgenome, "pkgname")
 
-        if (requireNamespace(BSgenome_name, quietly = TRUE, character.only = TRUE)) {
-            text <- paste0("package:", BSgenome_name)
-            object <- ls(text)[grep("^[^BSgenome]", ls(text))]
-            command <- paste0(BSgenome_name, "::", object)
-            ## execute the command "pkg::object"
-            BSgenome <- eval(parse(text = command))
+        ## no `character.only` (see getGeneAnno()), and read the exports of the namespace
+        ## rather than ls("package:..."), which needs the package to be attached
+        if (requireNamespace(BSgenome_name, quietly = TRUE)) {
+            exports <- getNamespaceExports(BSgenome_name)
+            object <- exports[grep("^[^BSgenome]", exports)]
+            BSgenome <- getExportedValue(BSgenome_name, object[1])
         }
     }
 

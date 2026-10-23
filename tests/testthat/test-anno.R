@@ -84,3 +84,23 @@ test_that("dropAnno by distance cutoff", {
     expect_true(length(cs2@anno) == 1)
     expect_equal(mcols(cs2@anno)$distanceToTSS, 500)
 })
+
+
+test_that("annotateSeq adds gene annotation from an annoDb given by name", {
+    skip_if_not_installed("org.Hs.eg.db")
+    ## the OrgDb package is loaded by annotateSeq, not attached by the caller
+    peak <- readPeakFile(system.file("extdata", "sample_peaks.txt", package = "epiSeeker"))[1:20]
+    res <- annotateSeq(peak, TxDb = TxDb.Hsapiens.UCSC.hg38.knownGene,
+                       annoDb = "org.Hs.eg.db", verbose = FALSE)
+    expect_true("SYMBOL" %in% names(GenomicRanges::mcols(res@anno)))
+    expect_true(any(!is.na(res@anno$SYMBOL)))
+})
+
+test_that("getGeneAnno accepts an OrgDb object as well as its name", {
+    skip_if_not_installed("org.Hs.eg.db")
+    db <- getExportedValue("org.Hs.eg.db", "org.Hs.eg.db")
+    by_name <- epiSeeker:::getGeneAnno("org.Hs.eg.db", c("7157", "672"), "Entrez Gene ID", "SYMBOL")
+    by_obj <- epiSeeker:::getGeneAnno(db, c("7157", "672"), "Entrez Gene ID", "SYMBOL")
+    expect_equal(by_name$SYMBOL, c("TP53", "BRCA1"))
+    expect_equal(by_obj, by_name)
+})

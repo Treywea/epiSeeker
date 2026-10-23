@@ -11,8 +11,12 @@
 getGeneAnno <- function(annoDb, geneID, type, columns) {
     kk <- unlist(geneID)
 
-    if (requireNamespace(annoDb, quietly = TRUE, character.only = TRUE)) {
-        annoDb <- eval(parse(text = annoDb))
+    ## `character.only` is an argument of require(), not of requireNamespace(); since R 4.6
+    ## loadNamespace() rejects it, requireNamespace() returned FALSE, `annoDb` stayed a string
+    ## and select() failed, reported as "ID type not matched". getExportedValue() also works
+    ## when the package is loaded but not attached, which eval(parse()) did not.
+    if (is.character(annoDb) && requireNamespace(annoDb, quietly = TRUE)) {
+        annoDb <- getExportedValue(annoDb, annoDb)
     }
 
     if (type == "Entrez Gene ID") {

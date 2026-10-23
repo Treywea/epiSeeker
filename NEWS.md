@@ -1,5 +1,14 @@
 # epiSeeker 1.1.4
 
++ `annotateSeq(annoDb = "org.Hs.eg.db")` adds the gene annotation (SYMBOL,
+  GENENAME, ENSEMBL) again under R >= 4.6. The package was loaded with
+  `requireNamespace(annoDb, character.only = TRUE)`; `character.only` is an
+  argument of `require()`, which R 4.6's `loadNamespace()` rejects, so
+  `requireNamespace()` returned `FALSE`, the database was never looked up, and
+  every call ended with the misleading warning "ID type not matched". The
+  database is now taken from the package namespace, so it need not be attached
+  either, and an `OrgDb` object is accepted as well as its name. The same fix
+  applies to the BSgenome lookup of `getBmMatrix()`. (2026-10-23, Fri)
 + `annotateSeq()` keeps `annotation`, `geneChr/geneStart/geneEnd`, `geneId` and
   `transcriptId` consistent with each other at transcript level (issue #252 of
   ChIPseeker). The transcript id of an exon/intron/UTR hit was taken from
