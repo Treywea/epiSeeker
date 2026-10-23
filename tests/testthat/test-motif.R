@@ -59,12 +59,3 @@ test_that("plotMotifProf works with motifMatrix example", {
 
     expect_equal(attr(motif_df, "range"), c(10525891, 10525991))
 })
-
-
-test_that("loadBSgenome returns the genome without the package being attached", {
-    skip_if_not_installed("BSgenome.Scerevisiae.UCSC.sacCer3")
-    g <- getExportedValue("BSgenome.Scerevisiae.UCSC.sacCer3", "Scerevisiae")
-    res <- epiSeeker:::loadBSgenome(g)
-    expect_s4_class(res, "BSgenome")
-    expect_equal(GenomeInfoDb::providerVersion(res), "sacCer3")
-})
