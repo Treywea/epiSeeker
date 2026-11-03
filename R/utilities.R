@@ -655,6 +655,10 @@ getGene <- function(TxDb, by = "gene") {
 
 #' get filenames of sample files
 #'
+#' Five ChIP-seq peak files from GEO: CBX6 and CBX7 (GSE40740) and ARmo at 0 M, 1 nM and
+#' 100 nM (GSE48308). The files were published on hg19 and are shipped lifted to hg38
+#' (UCSC hg19ToHg38 chain; peaks that did not map to one range of the same width were
+#' dropped, see data-raw/lift_sample_data_hg38.R), so annotate them with an hg38 TxDb.
 #'
 #' @title getSampleFiles
 #' @return list of file names

@@ -55,8 +55,10 @@ pwm_obj <- TFBSTools::getMatrixSet(sq24, opts_human)
 usethis::use_data(pwm_obj, overwrite = TRUE, compress = "xz")
 
 #------------------------------------------tagMatrix result------------------------------------------#
-library(TxDb.Hsapiens.UCSC.hg19.knownGene)
-txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+## the GEO example files are hg38 since 2026-11-03 (lifted from hg19 with
+## data-raw/lift_sample_data_hg38.R); run that first
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
 peak <- readPeakFile(getSampleFiles()[[4]])
 tagMatrix <- getTagMatrix(peak,
     type = "start_site", by = "gene",
@@ -66,12 +68,12 @@ tagMatrix <- getTagMatrix(peak,
 usethis::use_data(tagMatrix, overwrite = TRUE, compress = "xz")
 
 #------------------------------------------peakAnnoList------------------------------------------#
-library(TxDb.Hsapiens.UCSC.hg19.knownGene)
-txdb <- TxDb.Hsapiens.UCSC.hg19.knownGene
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
 files <- getSampleFiles()
 peakAnnoList <- lapply(files, annotateSeq,
     TxDb = txdb, annoDb = "org.Hs.eg.db",
     tssRegion = c(-3000, 3000), verbose = FALSE
 )
-names(peakAnnoList) <- names(peakfiles)
+names(peakAnnoList) <- names(files)
 usethis::use_data(peakAnnoList, overwrite = TRUE, compress = "xz")
