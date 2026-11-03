@@ -36,7 +36,7 @@ test_that("enrichPeakOverlap adds effect sizes and stays a data.frame", {
     skip_if_not_installed("TxDb.Hsapiens.UCSC.hg38.knownGene")
     q <- GenomicRanges::GRanges("chr1", IRanges::IRanges(c(1001, 5001), width = 100))
     t1 <- GenomicRanges::GRanges("chr1", IRanges::IRanges(1051, width = 100))      # half of one query peak
-    t2 <- GenomicRanges::GRanges("chr2", IRanges::IRanges(1001, width = 100))      # no overlap
+    t2 <- GenomicRanges::GRanges("chr1", IRanges::IRanges(9001, width = 100))      # no overlap
     res <- enrichPeakOverlap(q, list(a = t1, b = t2),
                              TxDb = TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene,
                              nShuffle = 0, mc.cores = 1, verbose = FALSE)
@@ -57,6 +57,11 @@ test_that("enrichPeakOverlap adds effect sizes and stays a data.frame", {
     expect_s3_class(res2, "peakOverlapResult")
     expect_equal(res2$jaccard, res$jaccard)
     expect_false(attr(res2, "params")$pool)
+    ## a target set on another chromosome shares nothing, without a seqlevels warning
+    q2 <- GenomicRanges::GRanges("chr1", IRanges::IRanges(1001, width = 100))
+    t3 <- GenomicRanges::GRanges("chr2", IRanges::IRanges(1001, width = 100))
+    expect_silent(es <- epiSeeker:::.overlap_effect_size(q2, list(t3)))
+    expect_equal(es$jaccard, 0)
 })
 
 test_that("csAnnoList checks its elements and works wherever a list does", {
