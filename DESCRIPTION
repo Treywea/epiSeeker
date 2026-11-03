@@ -32,6 +32,7 @@ Imports:
     BiocGenerics,
     Biostrings,
     boot,
+    clusterProfiler,
     dplyr,
     enrichplot,
     IRanges,
@@ -60,11 +61,12 @@ Imports:
     yulab.utils (>= 0.2.0),
     grid
 Suggests:
+    aisdk,
     ape,
     BSgenome,
     BSgenome.Hsapiens.UCSC.hg38,
-    clusterProfiler,
     data.table,
+    digest,
     GEOmetadb,
     GEOquery,
     gggenes,

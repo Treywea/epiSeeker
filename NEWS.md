@@ -1,5 +1,16 @@
 # epiSeeker 1.1.4
 
++ `interpret()` reads a `csAnno`: a method on the `interpret()` generic of clusterProfiler, which
+  epiSeeker now imports. The annotation (and, optionally, an `enrichPeakOverlap()` result) is
+  turned into an evidence digest without a model -- top regions with their nearest genes,
+  promoter genes, overlap with reference samples ranked by effect size rather than by
+  p-value, genomic distribution, distance to TSS and region width -- in which every section
+  states how many items it sends and how many there are. One structured call answers an
+  optional `question` first (`answer`, ranked `candidates`), then describes the regions.
+  A call counts as successful only when the model finished and returned an object; the
+  execution record is read with `clusterProfiler::provenance()`. Needs the S4 generic of
+  clusterProfiler (Treywea/clusterProfiler feat/interpret-s4-generic) and the `aisdk`
+  package. (2026-11-03, Tue)
 + `annotateSeq(annoDb = "org.Hs.eg.db")` adds the gene annotation (SYMBOL,
   GENENAME, ENSEMBL) again under R >= 4.6. The package was loaded with
   `requireNamespace(annoDb, character.only = TRUE)`; `character.only` is an
