@@ -285,7 +285,11 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
           frac_query = if (length(query.gr)) mean(IRanges::overlapsAny(query.gr, tt, ignore.strand = TRUE)) else NA_real_,
           frac_target = if (length(tt)) mean(IRanges::overlapsAny(tt, query.gr, ignore.strand = TRUE)) else NA_real_)
     }
-    m <- vapply(target.gr, one, numeric(3))
+    ## a target set on other chromosomes simply shares nothing (jaccard 0); GenomicRanges
+    ## warns "no sequence levels in common" for it, which says nothing the 0 does not
+    m <- withCallingHandlers(vapply(target.gr, one, numeric(3)), warning = function(w) {
+        if (grepl("no sequence levels in common", conditionMessage(w))) invokeRestart("muffleWarning")
+    })
     list(jaccard = unname(m["jaccard", ]), frac_query = unname(m["frac_query", ]),
          frac_target = unname(m["frac_target", ]))
 }
