@@ -4,6 +4,8 @@ S3method(arrange,GRanges)
 S3method(as.data.frame,csAnno)
 S3method(filter,GRanges)
 S3method(mutate,GRanges)
+S3method(print,seq_digest)
+S3method(print,seq_interpretation)
 S3method(rename,GRanges)
 S3method(subset,csAnno)
 export(.)
@@ -53,6 +55,7 @@ exportClasses(bmData)
 exportClasses(csAnno)
 exportClasses(csAnnoList)
 exportMethods(getBmMatrix)
+exportMethods(interpret)
 exportMethods(makeBmDataFromData)
 exportMethods(plotAnnoBar)
 exportMethods(plotAnnoPie)
@@ -133,6 +136,7 @@ importFrom(bsseq,
   BSseq,
   pData
 )
+importFrom(clusterProfiler,interpret)
 importFrom(dplyr,
   arrange,
   filter,
