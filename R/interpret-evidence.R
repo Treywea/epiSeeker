@@ -93,10 +93,24 @@
         "## Overview\n",
         "Regions: ", n, " (annotated at ", x@level, " level, TSS region ",
         x@tssRegion[1], " to ", x@tssRegion[2], " bp)\n",
+        "Genome: ", .source_line(x), "\n",
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
         "Context: ", if (is.null(context)) "not given" else context, "\n",
         "Question: ", if (is.null(question)) "none" else question
     )
+}
+
+## "hg38 (TxDb: UCSC knownGene GENCODE V48, Homo sapiens; annoDb: org.Hs.eg.db 3.23.1)"
+.source_line <- function(x) {
+    src <- annoSource(x)
+    bits <- c(
+        if (!is.null(src$TxDb)) paste0("TxDb: ", src$TxDb$source,
+                                       if (!is.na(src$TxDb$organism)) paste0(", ", src$TxDb$organism)),
+        if (!is.null(src$annoDb)) paste0("annoDb: ", src$annoDb$name,
+                                         if (!is.na(src$annoDb$version)) paste0(" ", src$annoDb$version))
+    )
+    paste0(if (is.na(src$genome)) "not recorded" else src$genome,
+           if (length(bits)) paste0(" (", paste(bits, collapse = "; "), ")"))
 }
 
 .digest_regions <- function(df, gene, feature, rank_by, n_regions) {
@@ -151,9 +165,15 @@
     })
     vals <- if (length(cols)) do.call(paste, c(fmt, sep = ", ")) else rep("", k)
     lines <- paste0(shown$rank, "\t", shown$tSample, "\t", shown$label, "\t", vals)
+    prm <- attr(overlap, "params")
+    how <- if (is.null(prm)) "" else paste0(
+        "p-values from ", prm$nShuffle, " shuffles",
+        if (isTRUE(prm$pool)) " with one null distribution pooled over all reference sets" else "",
+        "; the smallest possible p is ", signif(1 / (prm$nShuffle + 1), 3), "\n")
     text <- paste0(
         "## Overlap with reference samples (", k, " of ", nrow(ov), " with p.adjust < 0.05, ",
         total, " tested; ranked by ", if (is.na(rank_by)) "input order" else rank_by, ")\n",
+        how,
         if (k) paste(lines, collapse = "\n") else "none"
     )
     list(text = text, table = ov)
@@ -204,6 +224,91 @@
     if (is.null(x)) return(NA_character_)
     if (!requireNamespace("digest", quietly = TRUE)) return(NA_character_)
     digest::digest(paste(as.character(x), collapse = "\n"), algo = "sha256", serialize = FALSE)
+}
+
+## ---- csAnnoList: groups side by side ----------------------------------------------------
+
+#' @noRd
+.seq_digest_list <- function(x, context = NULL, assay = NULL, question = NULL, n_regions = 30,
+                             signal = NULL, max_genes = 50) {
+    if (!is(x, "csAnnoList")) stop("`x` must be a csAnnoList.")
+    grp <- names(x)
+    per <- lapply(x, function(a) {
+        df <- as.data.frame(a@anno)
+        if (!nrow(df)) stop("a group of `x` contains no regions.")
+        ord <- .rank_regions(df, signal)
+        df <- df[ord$index, , drop = FALSE]
+        gene <- .region_gene(df)
+        feature <- .short_annotation(df$annotation)
+        list(a = a, df = df, gene = gene, feature = feature, rank_by = ord$column,
+             prom = unique(gene[grepl("^Promoter", feature) & !is.na(gene)]))
+    })
+    sections <- list()
+    sections$overview <- paste0(
+        "## Overview\n",
+        "Groups: ", paste0(grp, " (", vapply(per, function(p) nrow(p$df), 0), " regions)", collapse = ", "), "\n",
+        "Genome: ", paste(unique(vapply(x, .source_line, "")), collapse = " | "), "\n",
+        "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
+        "Context: ", if (is.null(context)) "not given" else context, "\n",
+        "Question: ", if (is.null(question)) "none" else question
+    )
+    sections$distribution <- .digest_distribution_list(x)
+    sections$tss_distance <- paste0(
+        "## Distance to the nearest TSS (% of regions)\ngroup\twithin 1kb\t1-3kb\t3-10kb\t10-100kb\t>100kb\n",
+        paste(vapply(grp, function(g) {
+            d <- abs(per[[g]]$df$distanceToTSS)
+            b <- table(cut(d, c(0, 1e3, 3e3, 1e4, 1e5, Inf), right = FALSE))
+            paste(c(g, round(100 * as.numeric(b) / length(d), 1)), collapse = "\t")
+        }, ""), collapse = "\n"))
+    sections$width <- paste0(
+        "## Region width (bp)\ngroup\tmedian\tIQR\twider than 1 kb (%)\n",
+        paste(vapply(grp, function(g) {
+            w <- per[[g]]$df$width
+            q <- stats::quantile(w, c(0.25, 0.5, 0.75), names = FALSE)
+            paste0(g, "\t", q[2], "\t", q[1], "-", q[3], "\t", round(100 * mean(w > 1e3), 1))
+        }, ""), collapse = "\n"))
+    shared <- Reduce(intersect, lapply(per, `[[`, "prom"))
+    specific <- lapply(grp, function(g) setdiff(per[[g]]$prom, unlist(lapply(per[setdiff(grp, g)], `[[`, "prom"))))
+    names(specific) <- grp
+    sections$genes <- paste0(
+        "## Promoter genes\n",
+        "Shared by all groups: ", length(shared), if (length(shared)) paste0(" (first ", min(max_genes, length(shared)), ": ",
+            paste(utils::head(shared, max_genes), collapse = ", "), ")"), "\n",
+        paste(vapply(grp, function(g) {
+            sp <- specific[[g]]
+            paste0("Only in ", g, ": ", length(sp), " of ", length(per[[g]]$prom),
+                   if (length(sp)) paste0(" (first ", min(max_genes, length(sp)), " in region rank order: ",
+                                          paste(utils::head(sp, max_genes), collapse = ", "), ")"))
+        }, ""), collapse = "\n"))
+    sections$top_regions <- paste(vapply(grp, function(g) {
+        p <- per[[g]]
+        sub("^## Top regions", paste0("## Top regions of ", g),
+            .digest_regions(p$df, p$gene, p$feature, p$rank_by, n_regions))
+    }, ""), collapse = "\n\n")
+    structure(list(
+        text = paste(unlist(sections), collapse = "\n\n"),
+        sections = sections,
+        sha256 = vapply(sections, .sha256, ""),
+        evidence = list(shared_promoter_genes = shared, specific_promoter_genes = specific,
+                        promoter_genes = lapply(per, `[[`, "prom"),
+                        all_genes = lapply(per, function(p) unique(p$gene[!is.na(p$gene)]))),
+        totals = list(groups = grp, n_regions = vapply(per, function(p) nrow(p$df), 0),
+                      n_regions_sent = vapply(per, function(p) min(nrow(p$df), n_regions), 0))
+    ), class = "seq_digest")
+}
+
+.digest_distribution_list <- function(x) {
+    feats <- unique(unlist(lapply(x, function(a) as.character(a@annoStat$Feature))))
+    rows <- vapply(feats, function(f) {
+        v <- vapply(x, function(a) {
+            st <- a@annoStat
+            i <- match(f, as.character(st$Feature))
+            if (is.na(i)) 0 else round(st$Frequency[i], 1)
+        }, 0)
+        paste(c(f, v), collapse = "\t")
+    }, "")
+    paste0("## Genomic distribution (% of regions)\nfeature\t", paste(names(x), collapse = "\t"), "\n",
+           paste(rows, collapse = "\n"))
 }
 
 #' @method print seq_digest

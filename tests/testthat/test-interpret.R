@@ -80,7 +80,9 @@ test_that("interpret() dispatches to the csAnno method and sends the digest as t
     expect_identical(seen$prompt, attr(res, "evidence")$text)
     expect_false("temperature" %in% names(seen))          # NULL is not sent
     expect_equal(seen$max_tokens, 4096)
-    expect_equal(names(seen$schema$properties), epiSeeker:::.seq_fields)
+    expect_equal(names(seen$schema$properties), c("answer", "candidates", "binding_profile",
+                 "assay_consistency", "target_programs", "cofactors", "narrative"))
+    expect_match(seen$prompt, "Genome: hg38 (TxDb: UCSC", fixed = TRUE)
     p <- clusterProfiler::provenance(res)
     expect_true(p$ok)
     expect_equal(p$entry_point, "interpret,csAnno")
@@ -98,6 +100,8 @@ test_that("an unfinished answer is reported as a failure, not as a result", {
     )
     expect_warning(res <- clusterProfiler::interpret(anno, model = "openai:gpt-4o-mini"), "no complete answer")
     expect_true(is.na(res$answer))
+    expect_equal(res$candidates, list())
+    expect_true(is.na(res$assay_consistency$verdict))
     p <- clusterProfiler::provenance(res)
     expect_false(p$ok)
     expect_equal(p$calls[[1]]$status, "incomplete")
@@ -112,5 +116,64 @@ test_that("an unfinished answer is reported as a failure, not as a result", {
 test_that("enrichment results still go to clusterProfiler's own method", {
     m <- methods::selectMethod(clusterProfiler::interpret, "data.frame")
     expect_identical(m@defined[[1]], "ANY")
-    expect_true(methods::existsMethod(clusterProfiler::interpret, "csAnno"))
+    for (cl in c("csAnno", "GRanges", "csAnnoList", "peakOverlapResult"))
+        expect_true(methods::existsMethod(clusterProfiler::interpret, cl))
+})
+
+## a mock that answers with the empty object of whatever schema it is given
+mock_answer <- function(env) {
+    local_mocked_bindings(
+        generate_object = function(...) {
+            a <- list(...); env$seen <- a
+            list(object = lapply(a$schema$properties, epiSeeker:::.na_of), finish_reason = "stop", raw_text = "{}")
+        },
+        .package = "aisdk", .env = parent.frame()
+    )
+}
+
+test_that("a GRanges is annotated first, and only against a TxDb that was given", {
+    skip_if_not_installed("aisdk")
+    peak <- readPeakFile(system.file("extdata", "sample_peaks.txt", package = "epiSeeker"))
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
+    expect_error(clusterProfiler::interpret(peak), "Give `TxDb`")
+    env <- new.env(); mock_answer(env)
+    expect_message(res <- clusterProfiler::interpret(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", assay = "TF",
+                                                     model = "openai:m"), "Annotating 150 regions")
+    expect_equal(provenance <- clusterProfiler::provenance(res)$entry_point, "interpret,csAnno")
+    ## the same prompt as annotating by hand
+    by_hand <- epiSeeker:::.seq_digest(annotateSeq(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", verbose = FALSE),
+                                       assay = "TF")
+    expect_identical(env$seen$prompt, by_hand$text)
+})
+
+test_that("a csAnnoList is compared group by group", {
+    skip_if_not_installed("aisdk")
+    anno <- interpret_anno()
+    half <- anno
+    half@anno <- anno@anno[1:60]
+    half@annoStat <- epiSeeker:::getGenomicAnnoStat(half@anno)
+    x <- csAnnoList(all = anno, top = half)
+    ev <- epiSeeker:::.seq_digest_list(x, assay = "TF", n_regions = 5)
+    expect_equal(names(ev$sections), c("overview", "distribution", "tss_distance", "width", "genes", "top_regions"))
+    expect_match(ev$sections$overview, "all (150 regions), top (60 regions)", fixed = TRUE)
+    expect_match(ev$sections$top_regions, "Top regions of all (5 of 150", fixed = TRUE)
+    expect_match(ev$sections$top_regions, "Top regions of top (5 of 60", fixed = TRUE)
+    ## half is a subset of all, so nothing is specific to it
+    expect_length(ev$evidence$specific_promoter_genes$top, 0)
+    env <- new.env(); mock_answer(env)
+    res <- clusterProfiler::interpret(x, model = "openai:m")
+    expect_equal(names(env$seen$schema$properties), c("answer", "candidates", "group_profiles", "differences",
+                                                      "shared", "target_programs", "narrative"))
+    expect_equal(clusterProfiler::provenance(res)$entry_point, "interpret,csAnnoList")
+    expect_output(print(res), "epiSeeker interpretation")
+})
+
+test_that("an overlap table alone points to the csAnno method, and its test is described", {
+    ov <- toy_overlap()
+    class(ov) <- c("peakOverlapResult", "data.frame")
+    expect_error(clusterProfiler::interpret(ov), "overlap = ")
+    attr(ov, "params") <- list(nShuffle = 1000, pool = TRUE)
+    txt <- epiSeeker:::.digest_overlap(ov, 30)$text
+    expect_match(txt, "p-values from 1000 shuffles with one null distribution pooled", fixed = TRUE)
+    expect_match(txt, "smallest possible p is 0.000999", fixed = TRUE)
 })

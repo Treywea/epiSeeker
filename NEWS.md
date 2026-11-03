@@ -10,7 +10,12 @@
   A call counts as successful only when the model finished and returned an object; the
   execution record is read with `clusterProfiler::provenance()`. Needs the S4 generic of
   clusterProfiler (Treywea/clusterProfiler feat/interpret-s4-generic) and the `aisdk`
-  package. (2026-11-03, Tue)
+  package. A `GRanges` is annotated with `annotateSeq()` first (`TxDb` must be given, so
+  regions are never annotated against a default genome); a `csAnnoList` is compared group
+  by group (experimental: distributions, widths, distances to TSS, shared and group-specific
+  promoter genes, top regions); a `peakOverlapResult` alone is refused with a pointer to
+  `interpret(<csAnno>, overlap = )`. The digest states the genome and annotation source and
+  how the overlap p-values were obtained. (2026-11-03, Tue)
 + Result objects record more of how they were made, following the result classes of
   clusterProfiler. `annotateSeq()` stores the genome, the source, organism and creation time
   of `TxDb` and the name and version of `annoDb` in the new `annoSource` slot of `csAnno`,
