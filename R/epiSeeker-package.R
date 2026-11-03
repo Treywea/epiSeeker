@@ -129,7 +129,8 @@ NULL
 #' @section Provenance:
 #' The example peak annotation list was generated using several example peak
 #' files returned by \code{getSampleFiles()}. Each peak file was annotated
-#' using \code{epiSeeker::annotateSeq()}.
+#' using \code{epiSeeker::annotateSeq()} with \code{TxDb.Hsapiens.UCSC.hg38.knownGene},
+#' \code{annoDb = "org.Hs.eg.db"} and \code{tssRegion = c(-3000, 3000)}.
 #' @section Data structure:
 #' A named list where each element is a \code{csAnno} S4 object produced by \code{annotateSeq()}.
 #' @name peakAnnoList
@@ -149,7 +150,7 @@ NULL
 #' Peaks were imported via \code{readPeakFile()} and processed using
 #' \code{epiSeeker::getTagMatrix()} with the following settings:
 #' \itemize{
-#'   \item Transcript database: \code{TxDb.Hsapiens.UCSC.hg19.knownGene}
+#'   \item Transcript database: \code{TxDb.Hsapiens.UCSC.hg38.knownGene}
 #'   \item Annotation mode: \code{type = "start_site"}, \code{by = "gene"}
 #'   \item TSS window: upstream 3000 bp, downstream 3000 bp
 #'   \item Peak weight: column \code{"V5"} of the peak file

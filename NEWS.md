@@ -28,6 +28,17 @@
   `pool = TRUE` and `pool = FALSE`. A new class `csAnnoList` (made with `csAnnoList()`) holds
   named `csAnno` objects for comparison; it is a list, so `plotAnnoBar()`,
   `plotDistToTSS()` and `lapply()` accept it as before. (2026-11-03, Tue)
++ The example peak files are hg38, like the `TxDb` the vignette and the tests annotate them
+  with. The five GEO files of `getSampleFiles()` (GSE40740 CBX6/CBX7, GSE48308 ARmo) and
+  `sample_peaks.txt` were hg19 peaks annotated against hg38 genes: CBX6_BF had 15% of its
+  peaks within 1 kb of a TSS instead of 58%, and its Reactome enrichment (kidney
+  development, gastrulation) was gone. They are lifted with the UCSC hg19ToHg38 chain,
+  keeping the peaks that map to one range of the same width (98.5-100% per file,
+  `data-raw/lift_sample_data_hg38.R`); `tagMatrix` and `peakAnnoList` are rebuilt with
+  `TxDb.Hsapiens.UCSC.hg38.knownGene`, and the outputs pasted in the vignette are updated.
+  Annotated as published (hg19) and as shipped (hg38), the same peaks fall in the same
+  feature category for 96-98% of them, and CBX6 gives the same top Reactome pathways.
+  (2026-11-03, Tue)
 + `annotateSeq(annoDb = "org.Hs.eg.db")` adds the gene annotation (SYMBOL,
   GENENAME, ENSEMBL) again under R >= 4.6. The package was loaded with
   `requireNamespace(annoDb, character.only = TRUE)`; `character.only` is an
