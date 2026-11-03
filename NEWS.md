@@ -1,5 +1,17 @@
 # epiSeeker 1.1.4
 
++ Result objects record more of how they were made, following the result classes of
+  clusterProfiler. `annotateSeq()` stores the genome, the source, organism and creation time
+  of `TxDb` and the name and version of `annoDb` in the new `annoSource` slot of `csAnno`,
+  read with `annoSource()` and shown by `show()`; objects made earlier fall back to the
+  genome stored with the regions. `enrichPeakOverlap()` adds three effect sizes that need
+  no permutation -- `jaccard`, `frac_query` and `frac_target` -- because its p-value cannot
+  rank target sets (its smallest value, 1/(nShuffle+1), is shared by most of them); the
+  result is a `peakOverlapResult`, still a data.frame, with the arguments of the test in
+  `attr(, "params")`. With the same seed the existing columns are identical to before, for
+  `pool = TRUE` and `pool = FALSE`. A new class `csAnnoList` (made with `csAnnoList()`) holds
+  named `csAnno` objects for comparison; it is a list, so `plotAnnoBar()`,
+  `plotDistToTSS()` and `lapply()` accept it as before. (2026-11-03, Tue)
 + `annotateSeq(annoDb = "org.Hs.eg.db")` adds the gene annotation (SYMBOL,
   GENENAME, ENSEMBL) again under R >= 4.6. The package was loaded with
   `requireNamespace(annoDb, character.only = TRUE)`; `character.only` is an

@@ -154,7 +154,14 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   doubles the number of permutations and that the smallest reportable p-value
 #'   becomes `2/(nShuffle+1)`; use a larger `nShuffle` and `set.seed()` for a
 #'   reproducible result (issue #84 of ChIPseeker)
-#' @return data.frame
+#' @return a `peakOverlapResult`, which is a data.frame with one row per target peak set:
+#'   `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
+#'   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
+#'   union), `frac_query` (fraction of query peaks overlapping the target set) and
+#'   `frac_target` (fraction of target peaks overlapping the query). Strand is ignored for
+#'   the effect sizes. The p-value cannot rank target sets against each other: its smallest
+#'   value, 1/(nShuffle+1), is shared by most of them; rank by an effect size instead. The
+#'   arguments the p-values were computed with are in `attr(, "params")`.
 #' @export
 #' @examples
 #' require(TxDb.Hsapiens.UCSC.hg38.knownGene)
@@ -205,8 +212,9 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
                 symmetric = symmetric
             )
         })
-        res <- do.call("rbind", res_list)
-        return(res)
+        res <- do.call("rbind", lapply(res_list, as.data.frame))
+        return(.as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
+                                     pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb))
     }
 
     if (is.null(p.ol$pvalue)) {
@@ -245,6 +253,7 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         tSample <- basename(targetFiles)
     }
 
+    es <- .overlap_effect_size(query.gr, target.gr)
     res <- data.frame(
         qSample = qSample,
         tSample = tSample,
@@ -252,10 +261,47 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         tLen = unlist(lapply(target.gr, length)),
         N_OL = ol,
         pvalue = p,
-        p.adjust = padj
+        p.adjust = padj,
+        jaccard = es$jaccard,
+        frac_query = es$frac_query,
+        frac_target = es$frac_target
     )
 
-    return(res)
+    .as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
+                          pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb)
+}
+
+## Effect sizes that do not depend on a null distribution, one row per target set:
+## base-pair Jaccard of the reduced sets, and the fraction of query (target) peaks that
+## overlap the other set. Strand is ignored. Unlike the p-value, whose smallest value
+## 1/(nShuffle+1) is shared by most target sets, these can rank the targets.
+.overlap_effect_size <- function(query.gr, target.gr) {
+    q <- GenomicRanges::reduce(query.gr, ignore.strand = TRUE)
+    one <- function(tt) {
+        t <- GenomicRanges::reduce(tt, ignore.strand = TRUE)
+        u <- sum(as.numeric(GenomicRanges::width(GenomicRanges::union(q, t, ignore.strand = TRUE))))
+        i <- sum(as.numeric(GenomicRanges::width(GenomicRanges::intersect(q, t, ignore.strand = TRUE))))
+        c(jaccard = if (u > 0) i / u else NA_real_,
+          frac_query = if (length(query.gr)) mean(IRanges::overlapsAny(query.gr, tt, ignore.strand = TRUE)) else NA_real_,
+          frac_target = if (length(tt)) mean(IRanges::overlapsAny(tt, query.gr, ignore.strand = TRUE)) else NA_real_)
+    }
+    m <- vapply(target.gr, one, numeric(3))
+    list(jaccard = unname(m["jaccard", ]), frac_query = unname(m["frac_query", ]),
+         frac_target = unname(m["frac_target", ]))
+}
+
+setOldClass(c("peakOverlapResult", "data.frame"))
+
+## The result stays a data.frame (existing code keeps working); the class lets methods
+## recognise it and the attribute records how the p-values were obtained.
+.as_peakOverlapResult <- function(res, nShuffle, pool, symmetric, pAdjustMethod, chainFile, TxDb) {
+    genome <- tryCatch(paste(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), collapse = ","),
+                       error = function(e) NA_character_)
+    attr(res, "params") <- list(nShuffle = nShuffle, pool = pool, symmetric = symmetric,
+                                pAdjustMethod = pAdjustMethod, liftOver = !is.null(chainFile),
+                                genome = genome)
+    class(res) <- c("peakOverlapResult", "data.frame")
+    res
 }
 
 

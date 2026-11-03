@@ -12,6 +12,9 @@
 #' @slot detailGenomicAnnotation Genomic Annotation in detail
 #' @slot annoStat annotation statistics
 #' @slot peakNum number of peaks
+#' @slot annoSource where the annotation came from: the genome, the source, organism and
+#'   creation time of `TxDb`, and the name and version of `annoDb`; read it with
+#'   `annoSource()`
 #' @exportClass csAnno
 #' @author Guangchuang Yu <https://guangchuangyu.github.io>
 #' @seealso [annotateSeq()]
@@ -25,7 +28,8 @@ setClass("csAnno",
         hasGenomicAnnotation = "logical",
         detailGenomicAnnotation = "data.frame",
         annoStat = "data.frame",
-        peakNum = "numeric"
+        peakNum = "numeric",
+        annoSource = "list"
     )
 )
 
@@ -166,7 +170,8 @@ combine_csAnno <- function(x, ...) {
         hasGenomicAnnotation = combine_hasGenomicAnnotation,
         detailGenomicAnnotation = combine_detailGenomicAnnotation,
         annoStat = annoStat_result,
-        peakNum = combine_peakNum
+        peakNum = combine_peakNum,
+        annoSource = annoSource(x)
     )
 
     return(res)
@@ -279,6 +284,12 @@ setMethod(
             paste(length(object@anno), object@peakNum, sep = "/"),
             " peaks were annotated\n"
         )
+        src <- annoSource(object)
+        if (!is.na(src$genome) || !is.null(src$TxDb)) {
+            cat("Genome:", src$genome,
+                if (!is.null(src$TxDb$source)) paste0("(TxDb: ", src$TxDb$source, ", ", src$TxDb$created, ")"),
+                "\n")
+        }
         if (object@hasGenomicAnnotation) {
             cat("Genomic Annotation Summary:\n")
             print(object@annoStat)
@@ -450,3 +461,95 @@ setMethod(
         )
     }
 )
+
+#' Where the annotation of a csAnno came from
+#'
+#' The genome of the regions, and the source, organism and creation time of the `TxDb` and
+#' the name and version of the `annoDb` that [annotateSeq()] used. Objects made before this
+#' was recorded report only the genome stored with the regions.
+#'
+#' @param x a `csAnno` object
+#' @return a list with `genome`, `TxDb` (`NULL` when not recorded) and `annoDb` (`NULL` when
+#'   none was used or not recorded)
+#' @examples
+#' data(peakAnno)
+#' annoSource(peakAnno)
+#' @export
+annoSource <- function(x) {
+    if (!is(x, "csAnno")) stop("`x` must be a csAnno object.")
+    src <- if (methods::.hasSlot(x, "annoSource")) x@annoSource else list()
+    if (is.null(src$genome) || is.na(src$genome)) {
+        g <- unique(stats::na.omit(GenomeInfoDb::genome(x@anno)))
+        src$genome <- if (length(g)) paste(g, collapse = ",") else NA_character_
+    }
+    src[c("genome", "TxDb", "annoDb")]
+}
+
+## what annotateSeq() records; reading metadata never stops an annotation
+.make_anno_source <- function(TxDb, annoDb) {
+    meta <- function(db) {
+        m <- tryCatch(AnnotationDbi::metadata(db), error = function(e) NULL)
+        if (is.null(m) || !all(c("name", "value") %in% names(m))) return(list())
+        stats::setNames(as.list(m$value), m$name)
+    }
+    g <- tryCatch(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), error = function(e) character(0))
+    txdb <- if (is(TxDb, "GRanges")) {
+        list(source = "user-defined GRanges", organism = NA_character_, created = NA_character_)
+    } else {
+        m <- meta(TxDb)
+        list(source = paste(stats::na.omit(c(m[["Data source"]], m[["UCSC Table"]], m[["UCSC Track"]])), collapse = " "),
+             organism = if (is.null(m$Organism)) NA_character_ else m$Organism,
+             created = if (is.null(m[["Creation time"]])) NA_character_ else sub(" .*", "", m[["Creation time"]]))
+    }
+    db <- NULL
+    if (!is.null(annoDb)) {
+        name <- if (is.character(annoDb)) annoDb else class(annoDb)[1]
+        version <- if (is.character(annoDb)) tryCatch(as.character(utils::packageVersion(annoDb)), error = function(e) NA_character_) else NA_character_
+        m <- meta(if (is.character(annoDb)) tryCatch(getExportedValue(annoDb, annoDb), error = function(e) NULL) else annoDb)
+        db <- list(name = name, version = version,
+                   gene_source_date = if (is.null(m$EGSOURCEDATE)) NA_character_ else m$EGSOURCEDATE)
+    }
+    list(genome = if (length(g)) paste(g, collapse = ",") else NA_character_, TxDb = txdb, annoDb = db)
+}
+
+#' Class "csAnnoList"
+#'
+#' A named list of `csAnno` objects, one per sample or group, for comparing annotations
+#' (the counterpart of a `compareClusterResult`). It is a list, so every function that
+#' accepts a list of `csAnno` objects (`plotAnnoBar()`, `plotDistToTSS()`, `lapply()`) accepts
+#' it as well; the class adds the check that all elements are named `csAnno` objects, and
+#' methods such as `interpret()` can recognise it.
+#'
+#' @name csAnnoList-class
+#' @docType class
+#' @exportClass csAnnoList
+#' @seealso [csAnnoList()]
+#' @keywords classes
+setClass("csAnnoList", contains = "namedList", validity = function(object) {
+    msg <- character(0)
+    if (!length(object)) msg <- c(msg, "a csAnnoList needs at least one csAnno object")
+    if (!all(vapply(object, is, logical(1), "csAnno"))) msg <- c(msg, "every element must be a csAnno object")
+    nm <- names(object)
+    if (is.null(nm) || any(!nzchar(nm)) || anyDuplicated(nm)) msg <- c(msg, "every element needs a unique name")
+    if (length(msg)) msg else TRUE
+})
+
+#' Make a csAnnoList
+#'
+#' @param ... named `csAnno` objects, or one named list of them (for example the result of
+#'   `lapply(files, annotateSeq, ...)`)
+#' @return a `csAnnoList`
+#' @examples
+#' data(peakAnno)
+#' x <- csAnnoList(a = peakAnno, b = peakAnno)
+#' plotAnnoBar(x)
+#' @export
+csAnnoList <- function(...) {
+    x <- list(...)
+    if (length(x) == 1 && is.list(x[[1]]) && !is(x[[1]], "csAnno")) x <- x[[1]]
+    if (is(x, "csAnnoList")) return(x)
+    if (is.null(names(x)) || any(!nzchar(names(x)))) {
+        stop("every element needs a unique name, e.g. csAnnoList(control = x, treated = y)")
+    }
+    new("csAnnoList", .Data = unname(x), names = names(x))
+}

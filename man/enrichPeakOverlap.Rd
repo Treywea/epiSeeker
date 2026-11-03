@@ -46,7 +46,14 @@ becomes `2/(nShuffle+1)`; use a larger `nShuffle` and `set.seed()` for a
 reproducible result (issue #84 of ChIPseeker)}
 }
 \value{
-data.frame
+a `peakOverlapResult`, which is a data.frame with one row per target peak set:
+  `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
+  sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
+  union), `frac_query` (fraction of query peaks overlapping the target set) and
+  `frac_target` (fraction of target peaks overlapping the query). Strand is ignored for
+  the effect sizes. The p-value cannot rank target sets against each other: its smallest
+  value, 1/(nShuffle+1), is shared by most of them; rank by an effect size instead. The
+  arguments the p-values were computed with are in `attr(, "params")`.
 }
 \description{
 calculate overlap significant of ChIP experiments based on the genome coordinations
