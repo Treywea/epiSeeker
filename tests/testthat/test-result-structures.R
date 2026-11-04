@@ -15,6 +15,10 @@ test_that("annotateSeq records where the annotation came from", {
     expect_equal(src$annoDb$name, "org.Hs.eg.db")
     expect_equal(src$annoDb$version, as.character(utils::packageVersion("org.Hs.eg.db")))
     expect_output(show(x), "Genome: hg38")
+    ## kept through subsetting and saving
+    expect_equal(annoSource(dropAnno(x, distanceToTSS_cutoff = 1e6))$TxDb, src$TxDb)
+    f <- tempfile(fileext = ".rds"); saveRDS(x, f)
+    expect_equal(annoSource(readRDS(f)), src)
     ## combine_csAnno keeps the source of the first object
     expect_equal(annoSource(combine_csAnno(x, x))$TxDb, src$TxDb)
     ## no annoDb
@@ -23,9 +27,22 @@ test_that("annotateSeq records where the annotation came from", {
     expect_null(annoSource(y)$annoDb)
 })
 
+test_that("the source is kept without changing the csAnno class, so old objects can be saved", {
+    ## a new slot would make every csAnno saved by an earlier version fail in saveRDS()
+    expect_equal(methods::slotNames("csAnno"), c("anno", "tssRegion", "level", "hasGenomicAnnotation",
+                                                 "detailGenomicAnnotation", "annoStat", "peakNum"))
+    data(peakAnno, package = "epiSeeker")
+    data(peakAnnoList, package = "epiSeeker")
+    f <- tempfile(fileext = ".rds")
+    saveRDS(peakAnno, f); expect_identical(readRDS(f), peakAnno)
+    saveRDS(peakAnnoList, f); expect_identical(readRDS(f), peakAnnoList)
+    x <- csAnnoList(peakAnnoList)
+    saveRDS(x, f); expect_identical(readRDS(f), x)
+})
+
 test_that("a csAnno made before annoSource existed still works", {
     data(peakAnno, package = "epiSeeker")
-    expect_false(methods::.hasSlot(peakAnno, "annoSource"))
+    expect_null(S4Vectors::metadata(peakAnno@anno)$annoSource)
     src <- annoSource(peakAnno)
     expect_true(is.character(src$genome))
     expect_null(src$TxDb)
