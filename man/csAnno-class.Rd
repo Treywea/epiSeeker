@@ -35,10 +35,6 @@ This class represents the output of epiSeeker Annotation
 \item{\code{annoStat}}{annotation statistics}
 
 \item{\code{peakNum}}{number of peaks}
-
-\item{\code{annoSource}}{where the annotation came from: the genome, the source, organism and
-creation time of `TxDb`, and the name and version of `annoDb`; read it with
-`annoSource()`}
 }}
 
 \seealso{

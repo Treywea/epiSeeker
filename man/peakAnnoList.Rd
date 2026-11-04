@@ -19,7 +19,8 @@ See data-raw/example_data.R
 
 The example peak annotation list was generated using several example peak
 files returned by \code{getSampleFiles()}. Each peak file was annotated
-using \code{epiSeeker::annotateSeq()}.
+using \code{epiSeeker::annotateSeq()} with \code{TxDb.Hsapiens.UCSC.hg38.knownGene},
+\code{annoDb = "org.Hs.eg.db"} and \code{tssRegion = c(-3000, 3000)}.
 }
 
 \section{Data structure}{

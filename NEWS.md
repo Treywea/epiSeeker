@@ -18,9 +18,11 @@
   how the overlap p-values were obtained. (2026-11-03, Tue)
 + Result objects record more of how they were made, following the result classes of
   clusterProfiler. `annotateSeq()` stores the genome, the source, organism and creation time
-  of `TxDb` and the name and version of `annoDb` in the new `annoSource` slot of `csAnno`,
+  of `TxDb` and the name and version of `annoDb` in `metadata()` of the annotated regions,
   read with `annoSource()` and shown by `show()`; objects made earlier fall back to the
-  genome stored with the regions. `enrichPeakOverlap()` adds three effect sizes that need
+  genome stored with the regions. The `csAnno` class is unchanged: a new slot would leave
+  every `csAnno` saved by an earlier version without it, and `saveRDS()` then fails on such
+  an object ("no slot of name ..."). `enrichPeakOverlap()` adds three effect sizes that need
   no permutation -- `jaccard`, `frac_query` and `frac_target` -- because its p-value cannot
   rank target sets (its smallest value, 1/(nShuffle+1), is shared by most of them); the
   result is a `peakOverlapResult`, still a data.frame, with the arguments of the test in

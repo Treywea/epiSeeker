@@ -12,9 +12,6 @@
 #' @slot detailGenomicAnnotation Genomic Annotation in detail
 #' @slot annoStat annotation statistics
 #' @slot peakNum number of peaks
-#' @slot annoSource where the annotation came from: the genome, the source, organism and
-#'   creation time of `TxDb`, and the name and version of `annoDb`; read it with
-#'   `annoSource()`
 #' @exportClass csAnno
 #' @author Guangchuang Yu <https://guangchuangyu.github.io>
 #' @seealso [annotateSeq()]
@@ -28,8 +25,7 @@ setClass("csAnno",
         hasGenomicAnnotation = "logical",
         detailGenomicAnnotation = "data.frame",
         annoStat = "data.frame",
-        peakNum = "numeric",
-        annoSource = "list"
+        peakNum = "numeric"
     )
 )
 
@@ -170,8 +166,7 @@ combine_csAnno <- function(x, ...) {
         hasGenomicAnnotation = combine_hasGenomicAnnotation,
         detailGenomicAnnotation = combine_detailGenomicAnnotation,
         annoStat = annoStat_result,
-        peakNum = combine_peakNum,
-        annoSource = annoSource(x)
+        peakNum = combine_peakNum
     )
 
     return(res)
@@ -477,12 +472,22 @@ setMethod(
 #' @export
 annoSource <- function(x) {
     if (!is(x, "csAnno")) stop("`x` must be a csAnno object.")
-    src <- if (methods::.hasSlot(x, "annoSource")) x@annoSource else list()
+    src <- S4Vectors::metadata(x@anno)$annoSource
+    if (is.null(src)) src <- list()
     if (is.null(src$genome) || is.na(src$genome)) {
         g <- unique(stats::na.omit(GenomeInfoDb::genome(x@anno)))
         src$genome <- if (length(g)) paste(g, collapse = ",") else NA_character_
     }
     src[c("genome", "TxDb", "annoDb")]
+}
+
+## Kept in metadata(<anno>) rather than in a slot of csAnno: a new slot would leave every
+## csAnno saved by an earlier version without it, and Bioconductor's saveRDS() then fails on
+## such an object ("no slot of name ..."). The metadata of a GRanges survives [, subset(),
+## c() and sort(), so dropAnno(), subset() and combine_csAnno() keep it (the first object's).
+.set_anno_source <- function(gr, TxDb, annoDb) {
+    S4Vectors::metadata(gr)$annoSource <- .make_anno_source(TxDb, annoDb)
+    gr
 }
 
 ## what annotateSeq() records; reading metadata never stops an annotation

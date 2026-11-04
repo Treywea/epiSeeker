@@ -159,6 +159,7 @@ annotateSeq <- function(peak,
             Frequency = numeric(0)
         )
 
+        anno <- .set_anno_source(anno, TxDb, annoDb)
         return(new("csAnno",
             anno = anno,
             tssRegion = tssRegion,
@@ -166,8 +167,7 @@ annotateSeq <- function(peak,
             hasGenomicAnnotation = assignGenomicAnnotation,
             detailGenomicAnnotation = detail,
             annoStat = annoStat,
-            peakNum = peakNum,
-            annoSource = .make_anno_source(TxDb, annoDb)
+            peakNum = peakNum
         ))
     }
 
@@ -410,6 +410,7 @@ annotateSeq <- function(peak,
         )
     }
 
+    peak.gr <- .set_anno_source(peak.gr, TxDb, annoDb)
     if (assignGenomicAnnotation) {
         res <- new("csAnno",
             anno = peak.gr,
@@ -418,8 +419,7 @@ annotateSeq <- function(peak,
             hasGenomicAnnotation = TRUE,
             detailGenomicAnnotation = detailGenomicAnnotation,
             annoStat = getGenomicAnnoStat(peak.gr),
-            peakNum = peakNum,
-            annoSource = .make_anno_source(TxDb, annoDb)
+            peakNum = peakNum
         )
     } else {
         res <- new("csAnno",
@@ -427,8 +427,7 @@ annotateSeq <- function(peak,
             tssRegion = tssRegion,
             level = level,
             hasGenomicAnnotation = FALSE,
-            peakNum = peakNum,
-            annoSource = .make_anno_source(TxDb, annoDb)
+            peakNum = peakNum
         )
     }
 
