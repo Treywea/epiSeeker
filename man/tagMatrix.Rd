@@ -21,7 +21,7 @@ The tag matrix was generated using a sample peak file obtained from
 Peaks were imported via \code{readPeakFile()} and processed using
 \code{epiSeeker::getTagMatrix()} with the following settings:
 \itemize{
-  \item Transcript database: \code{TxDb.Hsapiens.UCSC.hg19.knownGene}
+  \item Transcript database: \code{TxDb.Hsapiens.UCSC.hg38.knownGene}
   \item Annotation mode: \code{type = "start_site"}, \code{by = "gene"}
   \item TSS window: upstream 3000 bp, downstream 3000 bp
   \item Peak weight: column \code{"V5"} of the peak file
