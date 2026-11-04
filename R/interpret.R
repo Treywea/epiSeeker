@@ -53,17 +53,19 @@
 #' @importFrom clusterProfiler interpret
 #' @exportMethod interpret
 #' @examples
-#' \dontrun{
 #' txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
 #' peak <- readPeakFile(system.file("extdata", "sample_peaks.txt", package = "epiSeeker"))
-#' anno <- annotateSeq(peak, TxDb = txdb, annoDb = "org.Hs.eg.db")
-#' res <- interpret(anno, context = "ChIP-seq in a human cell line", assay = "TF",
-#'                  question = "Which transcription factor was profiled?",
-#'                  model = "openai:gpt-4o-mini")
-#' res$answer
-#' clusterProfiler::provenance(res)
-#' ## straight from the peaks
-#' res <- interpret(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", assay = "TF")
+#' anno <- annotateSeq(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", verbose = FALSE)
+#' ## the call below needs a model; set one up with aisdk (an API key) to run it
+#' if (requireNamespace("aisdk", quietly = TRUE) && nzchar(Sys.getenv("OPENAI_API_KEY"))) {
+#'     res <- interpret(anno, context = "ChIP-seq in a human cell line", assay = "TF",
+#'                      question = "Which transcription factor was profiled?",
+#'                      model = "openai:gpt-4o-mini")
+#'     res$answer
+#'     clusterProfiler::provenance(res)
+#'     ## straight from the peaks
+#'     res <- interpret(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", assay = "TF",
+#'                      model = "openai:gpt-4o-mini")
 #' }
 NULL
 
@@ -86,10 +88,9 @@ setMethod("interpret", "GRanges", function(x, TxDb = NULL, annoDb = NULL,
         stop("Give `TxDb` for the genome of these regions; interpret() does not annotate ",
              "against a default genome. Or annotate first with annotateSeq() and pass the csAnno.")
     }
-    message("Annotating ", length(x), " regions with annotateSeq(tssRegion = c(",
-            tssRegion[1], ", ", tssRegion[2], "), level = \"", level, "\"",
-            if (!is.null(annoDb)) paste0(", annoDb = \"", if (is.character(annoDb)) annoDb else class(annoDb)[1], "\""),
-            ") before interpreting.")
+    db <- if (is.null(annoDb)) "NULL" else if (is.character(annoDb)) annoDb else class(annoDb)[1]
+    message("Annotating ", length(x), " regions with annotateSeq(tssRegion = c(", tssRegion[1],
+            ", ", tssRegion[2], "), level = \"", level, "\", annoDb = ", db, ") before interpreting.")
     anno <- annotateSeq(x, TxDb = TxDb, annoDb = annoDb, tssRegion = tssRegion, level = level,
                         verbose = FALSE)
     interpret(anno, ...)

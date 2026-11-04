@@ -115,16 +115,18 @@ returned a non-empty object; otherwise the fields are `NA`, a warning is raised 
 `provenance(res)$ok` is `FALSE`.
 }
 \examples{
-\dontrun{
 txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
 peak <- readPeakFile(system.file("extdata", "sample_peaks.txt", package = "epiSeeker"))
-anno <- annotateSeq(peak, TxDb = txdb, annoDb = "org.Hs.eg.db")
-res <- interpret(anno, context = "ChIP-seq in a human cell line", assay = "TF",
-                 question = "Which transcription factor was profiled?",
-                 model = "openai:gpt-4o-mini")
-res$answer
-clusterProfiler::provenance(res)
-## straight from the peaks
-res <- interpret(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", assay = "TF")
+anno <- annotateSeq(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", verbose = FALSE)
+## the call below needs a model; set one up with aisdk (an API key) to run it
+if (requireNamespace("aisdk", quietly = TRUE) && nzchar(Sys.getenv("OPENAI_API_KEY"))) {
+    res <- interpret(anno, context = "ChIP-seq in a human cell line", assay = "TF",
+                     question = "Which transcription factor was profiled?",
+                     model = "openai:gpt-4o-mini")
+    res$answer
+    clusterProfiler::provenance(res)
+    ## straight from the peaks
+    res <- interpret(peak, TxDb = txdb, annoDb = "org.Hs.eg.db", assay = "TF",
+                     model = "openai:gpt-4o-mini")
 }
 }
