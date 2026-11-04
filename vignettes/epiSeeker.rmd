@@ -335,8 +335,8 @@ chromosome names are used we have to change the style of the chromosome names
 from *Ensembl* to *UCSC* in the example below.
 
 ```{r annotate-seq-edb, eval = FALSE}
-library(EnsDb.Hsapiens.v75)
-edb <- EnsDb.Hsapiens.v75
+library(EnsDb.Hsapiens.v86)
+edb <- EnsDb.Hsapiens.v86
 seqlevelsStyle(edb) <- "UCSC"
 
 peakAnno.edb <- annotateSeq(files[[4]],
