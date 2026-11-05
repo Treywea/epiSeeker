@@ -14,7 +14,8 @@ enrichPeakOverlap(
   pool = TRUE,
   mc.cores = detectCores() - 1,
   verbose = TRUE,
-  symmetric = FALSE
+  symmetric = FALSE,
+  background = NULL
 )
 }
 \arguments{
@@ -30,7 +31,11 @@ enrichPeakOverlap(
 
 \item{chainFile}{chain file for liftOver}
 
-\item{pool}{logical, whether pool target peaks}
+\item{pool}{logical, whether pool target peaks. With `pool = TRUE` one null
+distribution is drawn by shuffling a randomly chosen target set at a time, so
+target sets of different sizes share it; with `pool = FALSE` each target set
+gets its own null. Ignored when `background` is given (each target set then
+has its own null)}
 
 \item{mc.cores}{number of cores, see \link[parallel]{mclapply}}
 
@@ -44,6 +49,20 @@ the result does not depend on the order of the arguments. Note that this
 doubles the number of permutations and that the smallest reportable p-value
 becomes `2/(nShuffle+1)`; use a larger `nShuffle` and `set.seed()` for a
 reproducible result (issue #84 of ChIPseeker)}
+
+\item{background}{regions the target peaks are shuffled into under the null
+(a `GRanges` or a bed file, in the coordinates of `queryPeak`), for example
+open chromatin, mappable regions or, for RNA modifications, exons. Default
+`NULL` shuffles over whole chromosomes. Peaks of real assays sit in a small
+part of the genome, so two unrelated peak sets overlap far more than peaks
+spread over whole chromosomes would, and almost every target set comes out
+"significant"; shuffling within a background that matches the data removes
+that. When given, each target set gets its own null: its peaks are moved to
+random positions in the background, chosen by base pair, keeping their widths
+and the number of peaks per chromosome (peaks on a chromosome without
+background go anywhere in it), and
+p = (#\{null >= observed\} + 1) / (nShuffle + 1). With `symmetric = TRUE` the
+mirrored direction shuffles the query peaks within the background}
 }
 \value{
 a `peakOverlapResult`, which is a data.frame with one row per target peak set:
@@ -51,8 +70,12 @@ a `peakOverlapResult`, which is a data.frame with one row per target peak set:
   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
   union), `frac_query` (fraction of query peaks overlapping the target set) and
   `frac_target` (fraction of target peaks overlapping the query). Strand is ignored for
-  the effect sizes. The p-value cannot rank target sets against each other: its smallest
-  value, 1/(nShuffle+1), is shared by most of them; rank by an effect size instead. The
+  the effect sizes. With a null distribution (`nShuffle > 0`) also `expected`, the mean
+  N_OL under the null, and `fold_enrichment` = N_OL / expected, which corrects for the
+  size of each target set (and, with `background`, for where peaks can be). The p-value
+  cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
+  shared by most of them; rank by `fold_enrichment` or another effect size instead. The
+  adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
   arguments the p-values were computed with are in `attr(, "params")`.
 }
 \description{

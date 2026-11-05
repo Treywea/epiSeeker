@@ -1,5 +1,26 @@
 # epiSeeker 1.1.4
 
++ `enrichPeakOverlap()` gains `background`: the regions target peaks are shuffled into under
+  the null (open chromatin, mappable regions, exons). Shuffling over whole chromosomes ignores
+  that peaks of real assays sit in a small part of the genome, so almost every target set came
+  out significant (1,193 of 1,200 query-target pairs on ENCODE data). With a background each
+  target set gets its own null, and the result reports `expected` (mean overlap under the null)
+  and `fold_enrichment`, which, unlike the p-value, can rank target sets. Fixed with
+  `pool = FALSE`: the adjusted p-values are corrected across all target sets (each call saw one
+  p-value), every target set keeps its name (all rows were `targetPeak1`), and lifted targets are
+  no longer lifted a second time. Fixed in `shuffle()`: chromosome lengths are taken by name;
+  when the seqlevels were not in alphabetical order (as `readPeakFile()` returns them for a file
+  that is not sorted by chromosome, or chr1, chr2, ..., chr10) peaks were placed along the length
+  of another chromosome; for the CBX7 example peaks with seqlevels chr1, chr2, ..., 272 of
+  1,649 shuffled peaks fell past the end of their chromosome. This changes the p-values for such
+  input. Defaults are unchanged. With `pool = FALSE` and target files, `tSample` is now the file name,
+  as with `pool = TRUE`. Two p-value errors are fixed for every setting: a null value equal to the
+  observed overlap now counts against it (`>=`, not `>`; for small target sets, whose overlap
+  is a small integer, 20% of unrelated sets were at p < 0.05, and 3.5% are now), and the
+  mirrored direction of `symmetric = TRUE` shuffles the whole query set in each permutation
+  and compares overlap counts, where it shuffled a single query peak and compared its 0/1
+  overlap with the observed ratio (two sets without any overlap came out at p = 0.04). Both
+  change existing p-values. (2026-11-05, Thu)
 + Result objects record more of how they were made, following the result classes of
   clusterProfiler. `annotateSeq()` stores the genome, the source, organism and creation time
   of `TxDb` and the name and version of `annoDb` in `metadata()` of the annotated regions,
