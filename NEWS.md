@@ -1,5 +1,19 @@
 # epiSeeker 1.1.4
 
++ Chromatin loops, the pair group next to regions (`csAnno`) and single bases (`bmData`).
+  `readLoops()` reads BEDPE files (also gzipped, with a Juicer/HiCCUPS `#` header, a plain
+  header or none), data frames, `GInteractions` and `Pairs`; loops are InteractionSet's
+  `GInteractions`, the class HiCExperiment and GenomicInteractions use, so InteractionSet is
+  now imported. `annotateLoops()` annotates both anchors with `annotateSeq()`, marks an
+  anchor as a promoter anchor when it overlaps the promoter window (`tssRegion`) of a
+  transcript of `TxDb`, records the genes (and, with `annoDb`, symbols) of those promoters,
+  and classes each loop as promoter-promoter, promoter-distal or distal-distal; the result
+  is a `loopAnno`, whose anchors are an ordinary `csAnno`. `linkPeaksToGenes()` gives each
+  peak of a `csAnno` the genes at the other end of the loops it sits in and compares them
+  with its nearest gene; `plotLoopAnno()` and `plotLoopLinks()` plot the loop classes, the
+  loop spans and the links. On K562 (ENCODE HiCCUPS loops and ATAC-seq peaks), 22% of the
+  87,875 peaks outside promoters sit in a loop anchor, and for 10,842 of them the loops
+  point to genes other than the nearest one. (2026-11-05, Thu)
 + Result objects record more of how they were made, following the result classes of
   clusterProfiler. `annotateSeq()` stores the genome, the source, organism and creation time
   of `TxDb` and the name and version of `annoDb` in `metadata()` of the annotated regions,

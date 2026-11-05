@@ -34,6 +34,7 @@ Imports:
     boot,
     dplyr,
     enrichplot,
+    InteractionSet,
     IRanges,
     GenomeInfoDb,
     GenomicRanges,

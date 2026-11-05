@@ -2,12 +2,14 @@
 
 S3method(arrange,GRanges)
 S3method(as.data.frame,csAnno)
+S3method(as.data.frame,loopAnno)
 S3method(filter,GRanges)
 S3method(mutate,GRanges)
 S3method(rename,GRanges)
 S3method(subset,csAnno)
 export(.)
 export(annoSource)
+export(annotateLoops)
 export(annotateSeq)
 export(as.GRanges)
 export(bmData)
@@ -29,6 +31,7 @@ export(getPromoters)
 export(getSampleFiles)
 export(getTagMatrix)
 export(grange2mt)
+export(linkPeaksToGenes)
 export(makeBmDataFromData)
 export(makeBmDataFromFiles)
 export(parse_peak)
@@ -39,9 +42,12 @@ export(plotBmProf)
 export(plotCov)
 export(plotDistToTSS)
 export(plotGeneTrack)
+export(plotLoopAnno)
+export(plotLoopLinks)
 export(plotMotifProf)
 export(plotPeakHeatmap)
 export(plotPeakProf)
+export(readLoops)
 export(readPeakFile)
 export(rel)
 export(seq2gene)
@@ -52,6 +58,7 @@ export(vennplot.peakfile)
 exportClasses(bmData)
 exportClasses(csAnno)
 exportClasses(csAnnoList)
+exportClasses(loopAnno)
 exportMethods(getBmMatrix)
 exportMethods(makeBmDataFromData)
 exportMethods(plotAnnoBar)
@@ -64,6 +71,7 @@ import(GenomeInfoDb)
 import(GenomicRanges)
 import(IRanges)
 import(ggplot2)
+importClassesFrom(InteractionSet,GInteractions)
 importClassesFrom(SummarizedExperiment,RangedSummarizedExperiment)
 importFrom(AnnotationDbi,
   get,
@@ -99,19 +107,34 @@ importFrom(GenomicRanges,
   strand
 )
 importFrom(IRanges,
+  CharacterList,
   IRanges,
+  findOverlaps,
+  promoters,
   subsetByOverlaps
+)
+importFrom(InteractionSet,
+  GInteractions,
+  anchorIds,
+  makeGInteractionsFromGRangesPairs,
+  pairdist,
+  regions
 )
 importFrom(RSQLite,
   dbConnect,
   dbGetQuery
 )
 importFrom(S4Vectors,
+  "mcols<-",
+  "metadata<-",
+  DataFrame,
   SimpleList,
   head,
+  mcols,
   metadata,
   queryHits,
   runValue,
+  splitAsList,
   subjectHits,
   tail
 )
@@ -155,12 +178,14 @@ importFrom(ggplot2,
   facet_grid,
   geom_bar,
   geom_blank,
+  geom_boxplot,
   geom_col,
   geom_curve,
   geom_hline,
   geom_line,
   geom_rect,
   geom_ribbon,
+  geom_text,
   geom_tile,
   geom_vline,
   ggplot,
@@ -175,6 +200,7 @@ importFrom(ggplot2,
   scale_fill_manual,
   scale_x_continuous,
   scale_y_continuous,
+  scale_y_log10,
   theme,
   theme_bw,
   theme_classic,
