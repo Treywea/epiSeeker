@@ -285,6 +285,10 @@ setMethod(
                 if (!is.null(src$TxDb$source)) paste0("(TxDb: ", src$TxDb$source, ", ", src$TxDb$created, ")"),
                 "\n")
         }
+        chk <- annoChecks(object)
+        if (isTRUE(chk$build$suspect)) {
+            cat("Check: the peaks may not be on this genome build (see annoChecks())\n")
+        }
         if (object@hasGenomicAnnotation) {
             cat("Genomic Annotation Summary:\n")
             print(object@annoStat)

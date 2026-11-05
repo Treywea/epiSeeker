@@ -196,17 +196,27 @@ annotateSeq <- function(peak,
     distance <- idx.dist$distance
 
     ## update peak, remove un-map peak if exists.
+    peak.in <- peak.gr
     peak.gr <- idx.dist$peak
 
-    n.dropped <- peakNum - length(peak.gr)
-    if (n.dropped > 0) {
-        warning(n.dropped, " of ", peakNum, " peaks were dropped, ",
-                "since no feature of 'TxDb' can be found for them. ",
-                "This usually happens for peaks located on contigs/scaffolds ",
-                "that carry no gene, or when the seqlevels style of the peaks ",
-                "does not match the one of 'TxDb'.",
-                call. = FALSE)
+    ## checks for silent errors (R/annoChecks.R): peaks dropped, and peaks on another genome
+    ## build than TxDb. They report and record; the annotation itself is unchanged.
+    dropped <- .anno_check_dropped(peak.in, peak.gr, TxDb, features)
+    if (dropped$n > 0) warning(.dropped_message(dropped), call. = FALSE)
+    build <- NULL
+    if (!is_GRanges_of_TxDb && length(peak.gr) > 0) {
+        build <- .anno_check_build(peak.gr, features, TxDb)
+        build <- c(build, .build_suspect(build))
+        if (build$suspect) {
+            warning("The peaks may not be on the genome build of 'TxDb' (",
+                    paste(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), collapse = ","),
+                    "): ", paste(build$reasons, collapse = "; "), ". An annotation against the ",
+                    "wrong build looks normal but is wrong; check the genome of the peaks and ",
+                    "use the matching TxDb, or lift the peaks over (rtracklayer::liftOver()). ",
+                    "Details: annoChecks().", call. = FALSE)
+        }
     }
+    checks <- list(build = build, dropped = dropped)
 
     ## nothing left to annotate: report the most common cause instead of
     ## failing later on with an unrelated error (issue #238 of ChIPseeker)
@@ -411,6 +421,7 @@ annotateSeq <- function(peak,
     }
 
     peak.gr <- .set_anno_source(peak.gr, TxDb, annoDb)
+    S4Vectors::metadata(peak.gr)$annoChecks <- checks
     if (assignGenomicAnnotation) {
         res <- new("csAnno",
             anno = peak.gr,
