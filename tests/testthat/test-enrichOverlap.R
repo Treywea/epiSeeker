@@ -256,8 +256,10 @@ test_that("a null value equal to the observed overlap counts against it", {
     ## two small unrelated sets: observed 0 overlaps and almost every shuffle gives 0 too,
     ## so p must be 1; with ties left out it was 1/(nShuffle+1)
     txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+    ## same chromosome (shuffle() keeps each peak on its chromosome; sets on different ones made
+    ## every permutation warn "no sequence levels in common"), far apart
     A <- GRanges("chr1", IRanges(c(1e6, 5e7), width = 300))
-    B <- GRanges("chr2", IRanges(c(1e6, 5e7), width = 300))
+    B <- GRanges("chr1", IRanges(c(2e7, 1e8), width = 300))
     set.seed(2)
     res <- enrichPeakOverlap(A, list(b = B), TxDb = txdb, nShuffle = 50, mc.cores = 1, verbose = FALSE)
     expect_equal(res$pvalue, 1)
