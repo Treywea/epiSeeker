@@ -1,5 +1,16 @@
 # epiSeeker 1.1.4
 
++ `annotateSeq()` checks two silent errors and keeps what it finds, read with
+  `annoChecks()`. It warns when the peaks look like coordinates of another genome build than
+  `TxDb`, that is when peaks extend beyond the chromosome ends of `TxDb`. An annotation
+  against the wrong build looks normal (hg19 example peaks annotated with the hg38 `TxDb` of
+  the vignette had 15% of their peaks within 1 kb of a TSS instead of 58%). On 116 ENCODE
+  and example files annotated with their own build and another one, the check raised no
+  false alarm on the 110 matched pairs and found 132 of the 136 mismatched ones; the four it
+  missed were sets of 50-150 peaks. The warning on dropped peaks now says how many were
+  dropped on which sequences and why (not in `TxDb`, named differently, no gene on the
+  sequence). The checks take under 1% of the time of `annotateSeq()` and never change the
+  annotation. (2026-11-05, Thu)
 + `enrichPeakOverlap()` gains `background`: the regions target peaks are shuffled into under
   the null (open chromatin, mappable regions, exons). Shuffling over whole chromosomes ignores
   that peaks of real assays sit in a small part of the genome, so almost every target set came
