@@ -143,7 +143,11 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #' @param pAdjustMethod pvalue adjustment method
 #' @param nShuffle shuffle numbers
 #' @param chainFile chain file for liftOver
-#' @param pool logical, whether pool target peaks
+#' @param pool logical, whether pool target peaks. With `pool = TRUE` one null
+#'   distribution is drawn by shuffling a randomly chosen target set at a time, so
+#'   target sets of different sizes share it; with `pool = FALSE` each target set
+#'   gets its own null. Ignored when `background` is given (each target set then
+#'   has its own null)
 #' @param mc.cores number of cores, see \link[parallel]{mclapply}
 #' @param verbose logical
 #' @param symmetric logical, whether the p-value should be direction free.
@@ -154,13 +158,30 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   doubles the number of permutations and that the smallest reportable p-value
 #'   becomes `2/(nShuffle+1)`; use a larger `nShuffle` and `set.seed()` for a
 #'   reproducible result (issue #84 of ChIPseeker)
+#' @param background regions the target peaks are shuffled into under the null
+#'   (a `GRanges` or a bed file, in the coordinates of `queryPeak`), for example
+#'   open chromatin, mappable regions or, for RNA modifications, exons. Default
+#'   `NULL` shuffles over whole chromosomes. Peaks of real assays sit in a small
+#'   part of the genome, so two unrelated peak sets overlap far more than peaks
+#'   spread over whole chromosomes would, and almost every target set comes out
+#'   "significant"; shuffling within a background that matches the data removes
+#'   that. When given, each target set gets its own null: its peaks are moved to
+#'   random positions in the background, chosen by base pair, keeping their widths
+#'   and the number of peaks per chromosome (peaks on a chromosome without
+#'   background go anywhere in it), and
+#'   p = (#\{null >= observed\} + 1) / (nShuffle + 1). With `symmetric = TRUE` the
+#'   mirrored direction shuffles the query peaks within the background
 #' @return a `peakOverlapResult`, which is a data.frame with one row per target peak set:
 #'   `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
 #'   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
 #'   union), `frac_query` (fraction of query peaks overlapping the target set) and
 #'   `frac_target` (fraction of target peaks overlapping the query). Strand is ignored for
-#'   the effect sizes. The p-value cannot rank target sets against each other: its smallest
-#'   value, 1/(nShuffle+1), is shared by most of them; rank by an effect size instead. The
+#'   the effect sizes. With a null distribution (`nShuffle > 0`) also `expected`, the mean
+#'   N_OL under the null, and `fold_enrichment` = N_OL / expected, which corrects for the
+#'   size of each target set (and, with `background`, for where peaks can be). The p-value
+#'   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
+#'   shared by most of them; rank by `fold_enrichment` or another effect size instead. The
+#'   adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
 #'   arguments the p-values were computed with are in `attr(, "params")`.
 #' @export
 #' @examples
@@ -174,7 +195,7 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #' @author G Yu
 enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod = "BH", nShuffle = 1000,
                               chainFile = NULL, pool = TRUE, mc.cores = detectCores() - 1, verbose = TRUE,
-                              symmetric = FALSE) {
+                              symmetric = FALSE, background = NULL) {
     TxDb <- loadTxDb(TxDb)
     query.gr <- loadPeak(queryPeak)
     if (is(targetPeak[1], "GRanges") || is(targetPeak[[1]], "GRanges")) {
@@ -194,49 +215,6 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         target.gr <- lapply(target.gr, liftOver, chain = chain)
     }
 
-    if (pool) {
-        p.ol <- enrichOverlap.peak.internal(query.gr, target.gr, TxDb, nShuffle,
-            mc.cores = mc.cores, verbose = verbose
-        )
-    } else {
-        res_list <- lapply(seq_len(length(target.gr)), function(i) {
-            enrichPeakOverlap(
-                queryPeak = queryPeak,
-                targetPeak = target.gr[i],
-                TxDb = TxDb,
-                pAdjustMethod = pAdjustMethod,
-                nShuffle = nShuffle,
-                chainFile = chainFile,
-                mc.cores = mc.cores,
-                verbose = verbose,
-                symmetric = symmetric
-            )
-        })
-        res <- do.call("rbind", lapply(res_list, as.data.frame))
-        return(.as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
-                                     pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb))
-    }
-
-    if (is.null(p.ol$pvalue)) {
-        p <- padj <- NA
-    } else {
-        p <- p.ol$pvalue
-        if (symmetric) {
-            ## combine the one-sided test with the mirrored direction (query and
-            ## target exchanged) as min(1, 2*min(p, p_rev)); see the 'Direction of
-            ## the test' section of the documentation
-            p.rev <- enrichOverlap.peak.mirrored(query.gr, target.gr, TxDb,
-                                                  nShuffle, mc.cores = mc.cores,
-                                                  verbose = verbose
-            )$pvalue
-            p <- pmin(1, 2 * pmin(p, p.rev))
-        }
-        padj <- p.adjust(p, method = pAdjustMethod)
-    }
-
-    ol <- p.ol$overlap
-
-
     if (is(queryPeak, "GRanges")) {
         qSample <- "queryPeak"
     } else {
@@ -253,6 +231,65 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         tSample <- basename(targetFiles)
     }
 
+    if (!is.null(background)) {
+        bg <- .prepare_background(background)
+        p.ol <- .overlap_perm_background(query.gr, target.gr, bg, nShuffle,
+                                         mc.cores = mc.cores, verbose = verbose)
+        null <- "per target set, shuffled within background"
+    } else if (pool) {
+        p.ol <- enrichOverlap.peak.internal(query.gr, target.gr, TxDb, nShuffle,
+            mc.cores = mc.cores, verbose = verbose
+        )
+        null <- "pooled over target sets, shuffled over whole chromosomes"
+    } else {
+        ## one call per target set. The target is passed with its name, which was
+        ## lost before (every row was "targetPeak1"), and the adjustment is made
+        ## here across all target sets: inside each call p.adjust() saw one p-value
+        res_list <- lapply(seq_len(length(target.gr)), function(i) {
+            enrichPeakOverlap(
+                queryPeak = queryPeak,
+                targetPeak = stats::setNames(target.gr[i], tSample[i]),
+                TxDb = TxDb,
+                pAdjustMethod = pAdjustMethod,
+                nShuffle = nShuffle,
+                chainFile = NULL,
+                mc.cores = mc.cores,
+                verbose = verbose,
+                symmetric = symmetric
+            )
+        })
+        res <- do.call("rbind", lapply(res_list, as.data.frame))
+        res$p.adjust <- if (all(is.na(res$pvalue))) NA else p.adjust(res$pvalue, method = pAdjustMethod)
+        return(.as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
+                                     pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb,
+                                     null = "per target set, shuffled over whole chromosomes"))
+    }
+
+    if (is.null(p.ol$pvalue)) {
+        p <- padj <- NA
+    } else {
+        p <- p.ol$pvalue
+        if (symmetric) {
+            ## combine the one-sided test with the mirrored direction (query and
+            ## target exchanged) as min(1, 2*min(p, p_rev)); see the 'Direction of
+            ## the test' section of the documentation
+            p.rev <- if (is.null(background)) {
+                enrichOverlap.peak.mirrored(query.gr, target.gr, TxDb,
+                                            nShuffle, mc.cores = mc.cores,
+                                            verbose = verbose
+                )$pvalue
+            } else {
+                .overlap_perm_background(query.gr, target.gr, bg, nShuffle, mc.cores = mc.cores,
+                                         verbose = verbose, shuffle_query = TRUE)$pvalue
+            }
+            p <- pmin(1, 2 * pmin(p, p.rev))
+        }
+        padj <- p.adjust(p, method = pAdjustMethod)
+    }
+
+    ol <- p.ol$overlap
+    expected <- if (is.null(p.ol$expected)) NA_real_ else p.ol$expected
+
     es <- .overlap_effect_size(query.gr, target.gr)
     res <- data.frame(
         qSample = qSample,
@@ -262,13 +299,16 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         N_OL = ol,
         pvalue = p,
         p.adjust = padj,
+        expected = expected,
+        fold_enrichment = ol / expected,
         jaccard = es$jaccard,
         frac_query = es$frac_query,
         frac_target = es$frac_target
     )
 
     .as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
-                          pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb)
+                          pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb,
+                          null = null)
 }
 
 ## Effect sizes that do not depend on a null distribution, one row per target set:
@@ -298,12 +338,13 @@ setOldClass(c("peakOverlapResult", "data.frame"))
 
 ## The result stays a data.frame (existing code keeps working); the class lets methods
 ## recognise it and the attribute records how the p-values were obtained.
-.as_peakOverlapResult <- function(res, nShuffle, pool, symmetric, pAdjustMethod, chainFile, TxDb) {
+.as_peakOverlapResult <- function(res, nShuffle, pool, symmetric, pAdjustMethod, chainFile, TxDb,
+                                  null = NA_character_) {
     genome <- tryCatch(paste(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), collapse = ","),
                        error = function(e) NA_character_)
     attr(res, "params") <- list(nShuffle = nShuffle, pool = pool, symmetric = symmetric,
                                 pAdjustMethod = pAdjustMethod, liftOver = !is.null(chainFile),
-                                genome = genome)
+                                genome = genome, null = null)
     class(res) <- c("peakOverlapResult", "data.frame")
     res
 }
@@ -327,14 +368,18 @@ setOldClass(c("peakOverlapResult", "data.frame"))
 #' shuffle(p, TxDb = txdb)
 #' @author G Yu
 shuffle <- function(peak.gr, TxDb) {
-    chrLens <- seqlengths(TxDb)[names(seqlengths(peak.gr))]
     nn <- as.vector(seqnames(peak.gr))
     ii <- order(nn)
     w <- width(peak.gr)
     nnt <- table(nn)
     jj <- order(names(nnt))
     nnt <- nnt[jj]
-    chrLens <- chrLens[jj]
+    ## lengths by chromosome name. They were taken in the order of seqlevels(peak.gr)
+    ## and paired by position with the alphabetical names of table(), so with
+    ## seqlevels chr1, chr2, ..., chr10 the peaks of chr10 were placed along the
+    ## length of chr2. Identical to before when the seqlevels are the chromosomes
+    ## with peaks, sorted alphabetically (as readPeakFile() returns them).
+    chrLens <- seqlengths(TxDb)[names(nnt)]
     ss <- unlist(lapply(seq_len(length(nnt)), function(i) sample(chrLens[i], nnt[i])))
 
     res <- GRanges(seqnames = nn[ii], ranges = IRanges(ss, width = w[ii]), strand = "*")
@@ -406,19 +451,87 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
     rr <- unlist(rr) ## random ratio
 
     ## p <- lapply(qr, function(q) mean(rr>q))
-    p <- lapply(qr, function(q) (sum(rr > q) + 1) / (length(rr) + 1))
-    res <- list(pvalue = unlist(p), overlap = qLen)
+    ## a null value equal to the observed one counts against it: with `>` ties were left
+    ## out, and for small target sets, where the overlap is a small integer and ties are
+    ## common, 20% of unrelated sets came out at p < 0.05
+    p <- lapply(qr, function(q) (sum(rr >= q) + 1) / (length(rr) + 1))
+    ## mean overlap under the pooled null, scaled to the size of each target set
+    res <- list(pvalue = unlist(p), overlap = qLen, expected = unname(mean(rr) * len))
     return(res)
+}
+
+## background for shuffling: reduced, strand ignored, indexed by chromosome once
+.prepare_background <- function(background) {
+    bg <- if (is(background, "GRanges")) background else loadPeak(background)
+    bg <- GenomicRanges::reduce(bg, ignore.strand = TRUE)
+    if (!length(bg)) stop("`background` contains no regions.")
+    chr <- as.character(seqnames(bg))
+    list(chr = chr, start = start(bg), width = width(bg), by_chr = split(seq_along(chr), chr))
+}
+
+## Move every peak to a random position in the background, chosen by base pair: a
+## background region is drawn with probability proportional to its width and the peak
+## placed uniformly within it. Widths and the number of peaks per chromosome are kept;
+## a peak on a chromosome without background goes anywhere in the background, and a
+## peak wider than its region starts at the region start.
+.shuffle_in_background <- function(peak.gr, bg) {
+    chr <- as.character(seqnames(peak.gr))
+    w <- width(peak.gr)
+    out_chr <- chr
+    out_start <- integer(length(chr))
+    for (cc in unique(chr)) {
+        i <- which(chr == cc)
+        k <- bg$by_chr[[cc]]
+        if (is.null(k)) k <- seq_along(bg$chr)
+        j <- k[sample.int(length(k), length(i), replace = TRUE, prob = bg$width[k])]
+        room <- pmax(bg$width[j] - w[i] + 1L, 1L)
+        out_start[i] <- bg$start[j] + as.integer(floor(stats::runif(length(i)) * room))
+        out_chr[i] <- bg$chr[j]
+    }
+    GRanges(out_chr, IRanges(out_start, width = w), strand = "*")
+}
+
+## Permutation test with one null per target set, shuffling the target set (or, for the
+## mirrored direction, the query) within the background. Returns, per target set, the
+## p-value (#{null >= observed} + 1) / (nShuffle + 1), the observed overlap and its mean
+## under the null.
+.overlap_perm_background <- function(query.gr, target.gr, bg, nShuffle, mc.cores = 1,
+                                     verbose = TRUE, shuffle_query = FALSE) {
+    if (verbose) {
+        message(">> permutation test of peak overlap within the background",
+                if (shuffle_query) " (mirrored)", "...\t", format(Sys.time(), "%Y-%m-%d %X"))
+    }
+    obs <- vapply(target.gr, function(tt) length(intersect(query.gr, tt)), numeric(1))
+    if (nShuffle < 1) {
+        return(list(pvalue = NULL, overlap = unname(obs), expected = NULL))
+    }
+    one <- function(j) {
+        if (shuffle_query) {
+            qs <- .shuffle_in_background(query.gr, bg)
+            vapply(target.gr, function(tt) length(intersect(qs, tt)), numeric(1))
+        } else {
+            vapply(target.gr, function(tt) length(intersect(query.gr, .shuffle_in_background(tt, bg))),
+                   numeric(1))
+        }
+    }
+    rr <- if (Sys.info()[1] == "Windows" || mc.cores <= 1) {
+        lapply(seq_len(nShuffle), one)
+    } else {
+        mclapply(seq_len(nShuffle), one, mc.cores = mc.cores)
+    }
+    rr <- matrix(unlist(rr), nrow = length(target.gr))
+    list(pvalue = unname((rowSums(rr >= obs) + 1) / (nShuffle + 1)),
+         overlap = unname(obs), expected = unname(rowMeans(rr)))
 }
 
 #' Mirrored permutation test of peak overlap
 #'
 #' The same permutation test as `enrichOverlap.peak.internal()`, but with the
 #' roles of the two peak sets exchanged: the *target* peaks are kept fixed and
-#' the *query* peaks are shuffled, so the observed ratio is the fraction of query
-#' peaks covered by the target peaks. It is the second half of the two-sided
-#' (symmetric) p-value of `enrichPeakOverlap(symmetric = TRUE)` (issue #84 of
-#' ChIPseeker).
+#' the whole *query* set is shuffled in each permutation, and the overlap with
+#' each target set is compared with its overlap under the null. It is the second
+#' half of the two-sided (symmetric) p-value of
+#' `enrichPeakOverlap(symmetric = TRUE)` (issue #84 of ChIPseeker).
 #'
 #' @param query.gr GRanges of the query peaks
 #' @param target.gr list of GRanges, one element per target peak set
@@ -442,9 +555,6 @@ enrichOverlap.peak.mirrored <- function(query.gr, target.gr, TxDb, nShuffle = 10
         )
     }
 
-    idx <- sample(seq_along(query.gr), nShuffle, replace = TRUE)
-    len <- length(query.gr)
-
     obs <- unlist(lapply(target.gr, function(tt) {
         length(intersect(query.gr, tt))
     }))
@@ -461,14 +571,17 @@ enrichOverlap.peak.mirrored <- function(query.gr, target.gr, TxDb, nShuffle = 10
         if (verbose) {
             setTxtProgressBar(pb, j)
         }
-        qShuffle <- shuffle(query.gr[idx[j]], TxDb)
+        ## the whole query set. One peak, query.gr[idx[j]], was shuffled before and its
+        ## overlap (0 or 1) compared with the observed ratio, so the null did not depend
+        ## on the data: two sets with no overlap at all came out at p = 0.02
+        qShuffle <- shuffle(query.gr, TxDb)
         unlist(lapply(target.gr, function(tt) length(intersect(qShuffle, tt))))
     }
 
     if (Sys.info()[1] == "Windows") {
-        rr <- lapply(seq_along(idx), shuffleOne)
+        rr <- lapply(seq_len(nShuffle), shuffleOne)
     } else {
-        rr <- mclapply(seq_along(idx), shuffleOne, mc.cores = mc.cores)
+        rr <- mclapply(seq_len(nShuffle), shuffleOne, mc.cores = mc.cores)
     }
 
     if (verbose) {
@@ -476,8 +589,8 @@ enrichOverlap.peak.mirrored <- function(query.gr, target.gr, TxDb, nShuffle = 10
     }
 
     rr <- matrix(unlist(rr), nrow = length(target.gr))
-    qr <- obs / len
-    p <- apply(rr, 1, function(r) (sum(r > qr) + 1) / (nShuffle + 1))
+    ## count with count; ties count against the observed overlap
+    p <- (rowSums(rr >= obs) + 1) / (nShuffle + 1)
 
     res <- list(pvalue = unname(p), overlap = obs)
     return(res)
