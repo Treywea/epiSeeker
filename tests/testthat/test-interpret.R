@@ -174,6 +174,37 @@ test_that("an overlap table alone points to the csAnno method, and its test is d
     expect_error(clusterProfiler::interpret(ov), "overlap = ")
     attr(ov, "params") <- list(nShuffle = 1000, pool = TRUE)
     txt <- epiSeeker:::.digest_overlap(ov, 30)$text
-    expect_match(txt, "p-values from 1000 shuffles with one null distribution pooled", fixed = TRUE)
+    expect_match(txt, "p-values from 1000 shuffles; null: pooled over reference sets, shuffled over whole chromosomes",
+                 fixed = TRUE)
     expect_match(txt, "smallest possible p is 0.000999", fixed = TRUE)
+    expect_match(txt, "rely on the ranking, not on the p-values", fixed = TRUE)
+    expect_match(txt, "ranked by jaccard (fold_enrichment is reported as an effect size", fixed = TRUE)
+    ## the null recorded by enrichPeakOverlap() is stated, and a background null gets no caution
+    attr(ov, "params") <- list(nShuffle = 100, pool = TRUE, null = "per target set, shuffled within background")
+    txt <- epiSeeker:::.digest_overlap(ov, 30)$text
+    expect_match(txt, "null: per target set, shuffled within background", fixed = TRUE)
+    expect_false(grepl("anti-conservative", txt))
+    ## ranking stays on jaccard when fold_enrichment is present
+    ov$fold_enrichment <- c(1, 50, 2, 3)
+    expect_equal(epiSeeker:::.digest_overlap(ov, 30)$table$label, c("CTCF", "RAD21", "CREB1"))
+})
+
+test_that("the digest reports what the checks of annotateSeq found", {
+    anno <- interpret_anno()
+    ## 150 peaks on the right build: consistent, but the check is unreliable for so few peaks
+    expect_match(epiSeeker:::.seq_digest(anno)$sections$overview,
+                 "Checks: genome build not contradicted, but the check is unreliable with 150 peaks", fixed = TRUE)
+    ## a suspected mismatch and dropped peaks are stated in the overview
+    S4Vectors::metadata(anno@anno)$annoChecks$build$suspect <- TRUE
+    S4Vectors::metadata(anno@anno)$annoChecks$build$reasons <- "3 peak(s) extend beyond the chromosome ends of TxDb (chr19)"
+    S4Vectors::metadata(anno@anno)$annoChecks$dropped <- list(n = 2, n_total = 152,
+        by_seqlevel = data.frame(seqlevel = "chrEBV", n = 2, reason = "not in TxDb"))
+    ov <- epiSeeker:::.seq_digest(anno)$sections$overview
+    expect_match(ov, "GENOME BUILD SUSPECT - 3 peak(s) extend beyond", fixed = TRUE)
+    expect_match(ov, "2 of 152 peaks dropped (not in TxDb: chrEBV 2)", fixed = TRUE)
+    ## objects made before the checks existed get no line
+    data(peakAnno, package = "epiSeeker")
+    expect_false(grepl("Checks:", epiSeeker:::.seq_digest(peakAnno)$sections$overview))
+    ## and the model is told what to do with it
+    expect_match(epiSeeker:::.seq_system_prompt(), "GENOME BUILD SUSPECT", fixed = TRUE)
 })

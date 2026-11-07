@@ -15,6 +15,11 @@
 ## distal factors and broad marks of matched data reach 0.11-0.2. So it is not used for the
 ## warning (NA), and annotateSeq() does not compute it; the code is kept for re-calibration.
 .tss_log2_cutoff <- NA_real_
+## Below this many peaks the build check is recorded as unreliable: only peaks near chromosome
+## ends can fall outside them, and the four mismatched sets the calibration missed had 50-160
+## peaks. Recorded in annoChecks() and shown by show(), not warned, so that small example and
+## test sets do not warn on every call.
+.build_min_peaks <- 200
 
 #' What the checks of annotateSeq found
 #'
@@ -29,7 +34,9 @@
 #'     and example files annotated with their own build and with another one, the
 #'     out-of-bound test raised no false alarm and found 132
 #'     of 136 mismatched pairs; it can miss small sets (the four it missed had 50-150 peaks),
-#'     because only peaks near chromosome ends can fall outside them.
+#'     because only peaks near chromosome ends can fall outside them. `n_peaks` is the number
+#'     of peaks checked and `reliable` is `FALSE` below 200 of them; `show()` then says that
+#'     the build check is unreliable for this set (no warning is raised for that alone).
 #'   \item `dropped`: peaks that were not annotated because `TxDb` has no feature on their
 #'     sequence, per sequence and reason (`not in TxDb`, `named differently`, `no feature`).
 #' }

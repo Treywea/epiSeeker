@@ -268,3 +268,19 @@ test_that("a null value equal to the observed overlap counts against it", {
                              verbose = FALSE)
     expect_equal(res$pvalue, 1)
 })
+
+test_that("without a background a note says once per session that the whole-genome null is anti-conservative", {
+    skip_if_not_installed("TxDb.Hsapiens.UCSC.hg38.knownGene")
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
+    q <- GenomicRanges::GRanges("chr1", IRanges::IRanges(c(1001, 5001), width = 100))
+    t <- GenomicRanges::GRanges("chr1", IRanges::IRanges(1051, width = 100))
+    run <- function(...) suppressWarnings(utils::capture.output(
+        r <- enrichPeakOverlap(q, list(a = t), TxDb = txdb, nShuffle = 2, mc.cores = 1, ...)))
+    rlang::reset_message_verbosity("epiSeeker_whole_genome_null")
+    expect_message(run(verbose = TRUE), "anti-conservative")
+    expect_no_message(run(verbose = TRUE), message = "anti-conservative")       # once per session
+    rlang::reset_message_verbosity("epiSeeker_whole_genome_null")
+    expect_no_message(run(verbose = FALSE), message = "anti-conservative")
+    old <- options(epiSeeker.null_note = FALSE); on.exit(options(old), add = TRUE)
+    expect_no_message(run(verbose = TRUE), message = "anti-conservative")
+})

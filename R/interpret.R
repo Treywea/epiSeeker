@@ -183,6 +183,8 @@ setMethod("interpret", "peakOverlapResult", function(x, ...) {
         "- Rank reference samples by the order given; a lower-ranked sample is weaker evidence.",
         "- Promoter-wide reference sets overlap most promoter-rich queries; do not take such an",
         "  overlap alone as the identity of the factor.",
+        "- If the input reports a GENOME BUILD SUSPECT or dropped peaks, say so first and treat",
+        "  statements that rest on the annotation (genes, distribution) as unreliable.",
         "- Say 'Not assessable' when the evidence cannot decide, rather than guessing.",
         sep = "\n"
     )

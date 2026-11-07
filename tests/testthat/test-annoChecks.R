@@ -31,6 +31,18 @@ test_that("peaks at TSSs on the right build raise no warning and are recorded as
     expect_false(b$suspect)
     expect_equal(b$n_out_of_bound, 0)
     expect_equal(annoChecks(x)$dropped$n, 0)
+    expect_true(b$reliable)
+    expect_equal(b$n_peaks, 400)
+    expect_false(any(grepl("unreliable", capture.output(show(x)))))
+})
+
+test_that("a small set is recorded as unreliable for the build check, without a warning", {
+    expect_no_warning(x <- annotateSeq(tss_peaks(50), TxDb = txdb, verbose = FALSE))
+    b <- annoChecks(x)$build
+    expect_false(b$suspect)
+    expect_false(b$reliable)
+    expect_equal(b$n_peaks, 50)
+    expect_output(show(x), "with 50 peaks the genome-build check is unreliable")
 })
 
 test_that("coordinates beyond the chromosome ends of TxDb are flagged", {

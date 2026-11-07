@@ -94,10 +94,32 @@
         "Regions: ", n, " (annotated at ", x@level, " level, TSS region ",
         x@tssRegion[1], " to ", x@tssRegion[2], " bp)\n",
         "Genome: ", .source_line(x), "\n",
+        .checks_line(x),
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
         "Context: ", if (is.null(context)) "not given" else context, "\n",
         "Question: ", if (is.null(question)) "none" else question
     )
+}
+
+## What the checks of annotateSeq() found (annoChecks()), as one line of the overview, so that
+## a model or an agent reading the digest sees a suspected genome-build mismatch or dropped
+## peaks before any other evidence. Empty for objects made before the checks existed.
+.checks_line <- function(x, prefix = "Checks: ") {
+    chk <- annoChecks(x)
+    if (is.null(chk)) return("")
+    b <- chk$build; d <- chk$dropped
+    parts <- c(
+        if (isTRUE(b$suspect)) paste0("GENOME BUILD SUSPECT - ", paste(b$reasons, collapse = "; "),
+                                      "; annotation-based evidence below may be wrong") else
+        if (isFALSE(b$reliable)) paste0("genome build not contradicted, but the check is unreliable with ",
+                                        b$n_peaks, " peaks") else
+        if (!is.null(b)) "genome build consistent with TxDb",
+        if (!is.null(d) && isTRUE(d$n > 0)) paste0(d$n, " of ", d$n_total, " peaks dropped (",
+            paste0(d$by_seqlevel$reason, ": ", d$by_seqlevel$seqlevel, " ", d$by_seqlevel$n,
+                   collapse = ", "), ")")
+    )
+    if (!length(parts)) return("")
+    paste0(prefix, paste(parts, collapse = "; "), "\n")
 }
 
 ## "hg38 (TxDb: UCSC knownGene GENCODE V48, Homo sapiens; annoDb: org.Hs.eg.db 3.23.1)"
@@ -166,13 +188,21 @@
     vals <- if (length(cols)) do.call(paste, c(fmt, sep = ", ")) else rep("", k)
     lines <- paste0(shown$rank, "\t", shown$tSample, "\t", shown$label, "\t", vals)
     prm <- attr(overlap, "params")
+    null <- if (is.null(prm$null) || is.na(prm$null)) {
+        if (isTRUE(prm$pool)) "pooled over reference sets, shuffled over whole chromosomes" else NA_character_
+    } else prm$null
     how <- if (is.null(prm)) "" else paste0(
-        "p-values from ", prm$nShuffle, " shuffles",
-        if (isTRUE(prm$pool)) " with one null distribution pooled over all reference sets" else "",
-        "; the smallest possible p is ", signif(1 / (prm$nShuffle + 1), 3), "\n")
+        "p-values from ", prm$nShuffle, " shuffles; null: ", if (is.na(null)) "not recorded" else null,
+        "; the smallest possible p is ", signif(1 / (prm$nShuffle + 1), 3), "\n",
+        if (!is.na(null) && grepl("whole chromosomes", null))
+            paste("A whole-genome null is anti-conservative for peaks in open chromatin: most reference",
+                  "sets pass p.adjust < 0.05, so rely on the ranking, not on the p-values.\n") else "")
+    ranking <- if (!is.na(rank_by) && rank_by == "jaccard")
+        "jaccard (fold_enrichment is reported as an effect size, not used for ranking)" else
+        if (is.na(rank_by)) "input order" else rank_by
     text <- paste0(
         "## Overlap with reference samples (", k, " of ", nrow(ov), " with p.adjust < 0.05, ",
-        total, " tested; ranked by ", if (is.na(rank_by)) "input order" else rank_by, ")\n",
+        total, " tested; ranked by ", ranking, ")\n",
         how,
         if (k) paste(lines, collapse = "\n") else "none"
     )
@@ -248,6 +278,8 @@
         "## Overview\n",
         "Groups: ", paste0(grp, " (", vapply(per, function(p) nrow(p$df), 0), " regions)", collapse = ", "), "\n",
         "Genome: ", paste(unique(vapply(x, .source_line, "")), collapse = " | "), "\n",
+        paste(vapply(grp, function(g) .checks_line(x[[g]], prefix = paste0("Checks (", g, "): ")), ""),
+              collapse = ""),
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
         "Context: ", if (is.null(context)) "not given" else context, "\n",
         "Question: ", if (is.null(question)) "none" else question

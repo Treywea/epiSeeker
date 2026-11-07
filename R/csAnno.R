@@ -288,6 +288,8 @@ setMethod(
         chk <- annoChecks(object)
         if (isTRUE(chk$build$suspect)) {
             cat("Check: the peaks may not be on this genome build (see annoChecks())\n")
+        } else if (isFALSE(chk$build$reliable)) {
+            cat("Check: with", chk$build$n_peaks, "peaks the genome-build check is unreliable (see annoChecks())\n")
         }
         if (object@hasGenomicAnnotation) {
             cat("Genomic Annotation Summary:\n")

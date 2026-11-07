@@ -171,6 +171,12 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   background go anywhere in it), and
 #'   p = (#\{null >= observed\} + 1) / (nShuffle + 1). With `symmetric = TRUE` the
 #'   mirrored direction shuffles the query peaks within the background
+#'
+#'   Without `background`, the first call of a session says so in a message (the
+#'   p-values of a whole-genome null are anti-conservative for peaks concentrated in open
+#'   chromatin: on 20 ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the
+#'   1200 pairs were significant). `verbose = FALSE` or
+#'   `options(epiSeeker.null_note = FALSE)` turns it off
 #' @return a `peakOverlapResult`, which is a data.frame with one row per target peak set:
 #'   `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
 #'   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
@@ -180,7 +186,9 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   N_OL under the null, and `fold_enrichment` = N_OL / expected, which corrects for the
 #'   size of each target set (and, with `background`, for where peaks can be). The p-value
 #'   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
-#'   shared by most of them; rank by `fold_enrichment` or another effect size instead. The
+#'   shared by most of them; rank by `jaccard` instead (on those 20 ENCODE peak sets it put
+#'   the profiled factor first for 11 of 14, `fold_enrichment` for 3-4), and report
+#'   `fold_enrichment` as an effect size. The
 #'   adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
 #'   arguments the p-values were computed with are in `attr(, "params")`.
 #' @export
@@ -230,6 +238,8 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
     } else {
         tSample <- basename(targetFiles)
     }
+
+    if (is.null(background) && nShuffle >= 1 && verbose) .note_whole_genome_null()
 
     if (!is.null(background)) {
         bg <- .prepare_background(background)
@@ -309,6 +319,19 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
     .as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
                           pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb,
                           null = null)
+}
+
+## Once per session (rlang's frequency = "once"); the recursive calls of pool = FALSE share it.
+.note_whole_genome_null <- function() {
+    if (isFALSE(getOption("epiSeeker.null_note", TRUE))) return(invisible())
+    rlang::inform(c(
+        "The p-values come from shuffling over whole chromosomes (`background = NULL`).",
+        i = paste("For peaks concentrated in open chromatin this null is anti-conservative: almost",
+                  "every target set comes out significant."),
+        i = paste("Give `background =` (e.g. open chromatin of the cell type) for calibrated p-values,",
+                  "and rank target sets by `jaccard`."),
+        i = "Turn this note off with verbose = FALSE or options(epiSeeker.null_note = FALSE)."
+    ), .frequency = "once", .frequency_id = "epiSeeker_whole_genome_null")
 }
 
 ## Effect sizes that do not depend on a null distribution, one row per target set:

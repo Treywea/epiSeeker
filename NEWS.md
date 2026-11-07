@@ -1,5 +1,21 @@
 # epiSeeker 1.1.4
 
++ `enrichPeakOverlap()` without `background` says, once per session, that the p-values of a
+  whole-genome null are anti-conservative for peaks concentrated in open chromatin (on 20
+  ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the 1200 pairs were
+  significant) and suggests `background =` and ranking by `jaccard`, which put the profiled
+  factor first for 11 of 14 sets against 3-4 for `fold_enrichment`. The default is
+  unchanged; `verbose = FALSE` or `options(epiSeeker.null_note = FALSE)` turns the note off.
+  (2026-11-07, Sat)
++ The genome-build check of `annotateSeq()` records `n_peaks` and `reliable` in
+  `annoChecks()`: below 200 peaks it is unreliable (only peaks near chromosome ends can fall
+  outside them; the mismatched sets it missed had 50-160 peaks), and `show()` says so. No
+  warning is raised for that alone, so small example and test sets stay quiet.
+  `interpret()` now puts these checks in the overview of its evidence digest (a suspected
+  build mismatch, dropped peaks, an unreliable check) and tells the model to state them
+  first; for an overlap table it states the null the p-values came from, warns that a
+  whole-genome null makes most reference sets significant, and ranks by `jaccard`, giving
+  `fold_enrichment` as an effect size. (2026-11-07, Sat)
 + `annotateSeq()` checks two silent errors and keeps what it finds, read with
   `annoChecks()`. It warns when the peaks look like coordinates of another genome build than
   `TxDb`, that is when peaks extend beyond the chromosome ends of `TxDb`. An annotation

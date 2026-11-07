@@ -207,6 +207,8 @@ annotateSeq <- function(peak,
     if (!is_GRanges_of_TxDb && length(peak.gr) > 0) {
         build <- .anno_check_build(peak.gr, features, TxDb)
         build <- c(build, .build_suspect(build))
+        build$n_peaks <- length(peak.gr)
+        build$reliable <- length(peak.gr) >= .build_min_peaks
         if (build$suspect) {
             warning("The peaks may not be on the genome build of 'TxDb' (",
                     paste(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), collapse = ","),
