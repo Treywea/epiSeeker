@@ -1,5 +1,14 @@
 # epiSeeker 1.1.4
 
++ Single-cell and spatial chromatin data enter as groups of a `csAnnoList`. `readFragments()`
+  reads a fragments file; `fragmentsToGroups()` sums the fragments of the cells or spots of each
+  cluster or spatial domain in tiles and keeps the group-specific tiles, matching barcodes with
+  or without the `-1` suffix of fragments files; `peaksToGroups()` takes per-group peaks or the
+  marker tables of ArchR, Signac and 10x; `annotateGroups()` annotates every group and records
+  the resolution, the number of cells or spots and spot coordinates in `metadata()`, read with
+  `groupInfo()`. `readSpotPositions()` and `plotSpatialGroups()` read and plot spot positions.
+  The clustering itself stays with the upstream tools. `interpret()` states the resolution and
+  the cells or spots behind every group. No new class and no new dependency. (2026-11-07, Sat)
 + `enrichPeakOverlap()` without `background` says, once per session, that the p-values of a
   whole-genome null are anti-conservative for peaks concentrated in open chromatin (on 20
   ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the 1200 pairs were
