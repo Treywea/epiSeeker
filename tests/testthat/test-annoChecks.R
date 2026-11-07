@@ -44,6 +44,9 @@ test_that("coordinates beyond the chromosome ends of TxDb are flagged", {
 
 test_that("a genome recorded on the peaks that differs from TxDb already stops in GenomicRanges", {
     pk <- tss_peaks()
+    ## only the sequences in use: with all ~700 of TxDb the message, which lists them, is cut at
+    ## R's error-message limit (getOption("warning.length")) before "incompatible genomes"
+    GenomeInfoDb::seqlevels(pk) <- GenomeInfoDb::seqlevelsInUse(pk)
     GenomeInfoDb::genome(pk) <- "hg19"
     expect_error(annotateSeq(pk, TxDb = txdb, verbose = FALSE), "genomes")
 })
