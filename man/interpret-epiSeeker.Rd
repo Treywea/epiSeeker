@@ -109,6 +109,7 @@ hashed into the execution record, which [clusterProfiler::provenance()] returns.
   their distributions, widths, distances to TSS, shared and group-specific promoter genes,
   and top regions.
 * `peakOverlapResult`: not interpreted alone; pass it as `overlap` of the `csAnno` method.
+* `bmData` and `loopAnno` (experimental): see [interpret-base-pair].
 
 A call counts as successful only when the model finished (`finish_reason == "stop"`) and
 returned a non-empty object; otherwise the fields are `NA`, a warning is raised and

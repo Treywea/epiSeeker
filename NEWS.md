@@ -1,5 +1,18 @@
 # epiSeeker 1.1.4
 
++ `interpret()` reads a `bmData` and a `loopAnno` (experimental: neither has been compared
+  with a baseline that uses no model), so every group -- interval, base and pair -- has a
+  method on the shared skeleton. The `bmData` digest merges sites into clusters and reports
+  their mean level per sample (with `TxDb`, their feature and nearest gene), the differences
+  between samples, the distribution of levels and the coverage; the level and coverage assays
+  are found by their values or named with `value =` / `coverage =`. The `loopAnno` digest
+  reports the genes at promoter anchors ranked by loops, the peak links of
+  `linkPeaksToGenes()` when given (`links =`), the loop classes, the anchor distribution and
+  the span per class. `linkPeaksToGenes()` gains `TxDb`, `gene_ids`, `anchor_flank`,
+  `distal_distance` and `exclude_own_anchor`, which reproduce the definitions used to score
+  loops against a CRISPRi enhancer-gene benchmark (protein-coding genes; genes of an anchor =
+  transcript starts within the anchor +/- 1 kb; nearest gene from transcript starts; distal =
+  more than 3 kb from one); the defaults are unchanged. (2026-11-07, Sat)
 + `enrichPeakOverlap()` without `background` says, once per session, that the p-values of a
   whole-genome null are anti-conservative for peaks concentrated in open chromatin (on 20
   ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the 1200 pairs were

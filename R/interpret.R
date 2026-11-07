@@ -16,6 +16,7 @@
 #'   their distributions, widths, distances to TSS, shared and group-specific promoter genes,
 #'   and top regions.
 #' * `peakOverlapResult`: not interpreted alone; pass it as `overlap` of the `csAnno` method.
+#' * `bmData` and `loopAnno` (experimental): see [interpret-base-pair].
 #'
 #' A call counts as successful only when the model finished (`finish_reason == "stop"`) and
 #' returned a non-empty object; otherwise the fields are `NA`, a warning is raised and
@@ -116,14 +117,15 @@ setMethod("interpret", "peakOverlapResult", function(x, ...) {
 
 ## ---- shared skeleton: one model call, success check and execution record ---------------
 
-.seq_interpret_run <- function(ev, schema, entry_point, model, max_tokens, temperature, reasoning) {
+.seq_interpret_run <- function(ev, schema, entry_point, model, max_tokens, temperature, reasoning,
+                               system = .seq_system_prompt()) {
     if (!requireNamespace("aisdk", quietly = TRUE)) {
         stop("interpret() needs the 'aisdk' package: install.packages('aisdk')")
     }
     prov <- .prov_new()
     gen <- tryCatch(
         .seq_generate(prov, model = model, prompt = ev$text, schema = schema,
-                      system = .seq_system_prompt(), temperature = temperature,
+                      system = system, temperature = temperature,
                       max_tokens = max_tokens, reasoning = reasoning),
         error = function(e) NULL
     )
@@ -174,9 +176,12 @@ setMethod("interpret", "peakOverlapResult", function(x, ...) {
     !is.null(gen) && identical(gen$finish_reason, "stop") && length(gen$object) > 0
 }
 
-.seq_system_prompt <- function() {
+## `reads` names the data for the base and pair methods; left NULL, the prompt is the one the
+## region methods have always sent
+.seq_system_prompt <- function(reads = NULL) {
     paste(
-        "You interpret genomic regions (peaks from ChIP-seq, ATAC-seq, CUT&Tag or similar)",
+        if (is.null(reads)) "You interpret genomic regions (peaks from ChIP-seq, ATAC-seq, CUT&Tag or similar)"
+        else paste0("You interpret ", reads),
         "from a deterministic summary of them. Use only the evidence given:",
         "- Name only genes, regions, groups and reference samples that appear in the input.",
         "- Quote percentages, widths and counts as given; do not compute new ones.",

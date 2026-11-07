@@ -4,12 +4,40 @@
 \alias{linkPeaksToGenes}
 \title{Link peaks to genes through chromatin loops}
 \usage{
-linkPeaksToGenes(peak, loops)
+linkPeaksToGenes(
+  peak,
+  loops,
+  TxDb = NULL,
+  gene_ids = NULL,
+  anchor_flank = NULL,
+  distal_distance = NULL,
+  exclude_own_anchor = FALSE,
+  annoDb = NULL
+)
 }
 \arguments{
 \item{peak}{a `csAnno` from [annotateSeq()], made with the same `TxDb` as `loops`}
 
 \item{loops}{a [loopAnno-class] object from [annotateLoops()]}
+
+\item{TxDb}{`TxDb`, `EnsDb` or `GRanges` of features with `gene_id`; needed for
+`anchor_flank` and `distal_distance`}
+
+\item{gene_ids}{optional gene ids to consider (as in `TxDb`), e.g. protein-coding genes:
+`AnnotationDbi::select(org.Hs.eg.db, keys(org.Hs.eg.db), "GENETYPE")`, those with
+`GENETYPE == "protein-coding"`}
+
+\item{anchor_flank}{optional; genes of an anchor = genes with a transcript start within the
+anchor extended by this many bp on each side}
+
+\item{distal_distance}{optional; nearest gene = gene of the nearest transcript start to the
+peak centre, and a peak within this many bp of it is a promoter peak}
+
+\item{exclude_own_anchor}{logical; leave out of a peak's loop genes the genes of the
+anchors the peak is in. Default `FALSE`.}
+
+\item{annoDb}{optional annotation package or `OrgDb`; with `anchor_flank` or
+`distal_distance`, adds `loop_symbols` and `nearest_symbol` for the gene ids}
 }
 \value{
 a data frame with one row per peak, in the order of `peak`: coordinates,
@@ -26,6 +54,16 @@ The link of a peak is one of `"promoter"` (the peak is in a promoter), `"no loop
 anchor overlaps the peak), `"loop, no gene"` (the other ends are not promoter anchors),
 `"loop includes nearest"` (the nearest gene is among the loop genes) and
 `"loop, other genes"` (the loops point to genes other than the nearest one).
+
+The defaults use the annotation of [annotateSeq()] and [annotateLoops()]. Stricter
+definitions, as used to score loops against a CRISPRi enhancer-gene benchmark, are
+options: restrict the genes (`gene_ids`, e.g. protein-coding genes), call the genes of an
+anchor those with a transcript start inside the anchor extended by `anchor_flank` bp
+(instead of the promoter window of `annotateLoops()`), take the nearest gene from the
+transcript starts of those genes and call a peak a promoter peak within `distal_distance`
+bp of one (instead of the annotation), and leave out the genes of the peak's own anchors
+(`exclude_own_anchor`). `TxDb` is needed for `anchor_flank` and `distal_distance`. With
+these options, symbols are reported only when `annoDb` is given.
 }
 \examples{
 \donttest{

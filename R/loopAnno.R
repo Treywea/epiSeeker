@@ -248,8 +248,31 @@ annotateLoops <- function(loops, TxDb = NULL, tssRegion = c(-3000, 3000), level 
 #' `"loop includes nearest"` (the nearest gene is among the loop genes) and
 #' `"loop, other genes"` (the loops point to genes other than the nearest one).
 #'
+#' The defaults use the annotation of [annotateSeq()] and [annotateLoops()]. Stricter
+#' definitions, as used to score loops against a CRISPRi enhancer-gene benchmark, are
+#' options: restrict the genes (`gene_ids`, e.g. protein-coding genes), call the genes of an
+#' anchor those with a transcript start inside the anchor extended by `anchor_flank` bp
+#' (instead of the promoter window of `annotateLoops()`), take the nearest gene from the
+#' transcript starts of those genes and call a peak a promoter peak within `distal_distance`
+#' bp of one (instead of the annotation), and leave out the genes of the peak's own anchors
+#' (`exclude_own_anchor`). `TxDb` is needed for `anchor_flank` and `distal_distance`. With
+#' these options, symbols are reported only when `annoDb` is given.
+#'
 #' @param peak a `csAnno` from [annotateSeq()], made with the same `TxDb` as `loops`
 #' @param loops a [loopAnno-class] object from [annotateLoops()]
+#' @param TxDb `TxDb`, `EnsDb` or `GRanges` of features with `gene_id`; needed for
+#'   `anchor_flank` and `distal_distance`
+#' @param gene_ids optional gene ids to consider (as in `TxDb`), e.g. protein-coding genes:
+#'   `AnnotationDbi::select(org.Hs.eg.db, keys(org.Hs.eg.db), "GENETYPE")`, those with
+#'   `GENETYPE == "protein-coding"`
+#' @param anchor_flank optional; genes of an anchor = genes with a transcript start within the
+#'   anchor extended by this many bp on each side
+#' @param distal_distance optional; nearest gene = gene of the nearest transcript start to the
+#'   peak centre, and a peak within this many bp of it is a promoter peak
+#' @param exclude_own_anchor logical; leave out of a peak's loop genes the genes of the
+#'   anchors the peak is in. Default `FALSE`.
+#' @param annoDb optional annotation package or `OrgDb`; with `anchor_flank` or
+#'   `distal_distance`, adds `loop_symbols` and `nearest_symbol` for the gene ids
 #' @return a data frame with one row per peak, in the order of `peak`: coordinates,
 #'   `feature`, `nearest_gene` (and `nearest_symbol` when available), `n_loops`,
 #'   `loop_genes` (and `loop_symbols`), separated by "/", and `link`
@@ -263,7 +286,8 @@ annotateLoops <- function(loops, TxDb = NULL, tssRegion = c(-3000, 3000), level 
 #' linkPeaksToGenes(annotateSeq(pk, TxDb = txdb, verbose = FALSE), la)
 #' }
 #' @export
-linkPeaksToGenes <- function(peak, loops) {
+linkPeaksToGenes <- function(peak, loops, TxDb = NULL, gene_ids = NULL, anchor_flank = NULL,
+                             distal_distance = NULL, exclude_own_anchor = FALSE, annoDb = NULL) {
     if (!is(peak, "csAnno")) {
         stop("`peak` must be a csAnno: annotate it with annotateSeq() and the TxDb used for the loops.")
     }
@@ -274,14 +298,27 @@ linkPeaksToGenes <- function(peak, loops) {
     i1 <- anchorIds(gi, type = "first")
     i2 <- anchorIds(gi, type = "second")
     reg <- regions(gi)
+    strict <- !is.null(anchor_flank) || !is.null(distal_distance)
+    if (strict && is.null(TxDb)) stop("`anchor_flank` and `distal_distance` need `TxDb`.")
+    if (strict) tss <- .tss_of(TxDb, gene_ids)
+
+    ## genes of every anchor: stored by annotateLoops(), or from transcript starts
+    anchor_genes <- if (!is.null(anchor_flank)) {
+        .genes_near(reg, tss, anchor_flank)
+    } else {
+        ag <- vector("list", length(reg))
+        ag[i1] <- as.list(mc$anchor1_genes); ag[i2] <- as.list(mc$anchor2_genes)
+        lapply(ag, function(z) unique(as.character(unlist(z))))
+    }
+    if (!is.null(gene_ids)) anchor_genes <- lapply(anchor_genes, intersect, as.character(gene_ids))
 
     ## for every anchor: the genes at the other end of its loops, and how many loops
     a <- c(i1, i2)
-    other <- c(as.list(mc$anchor2_genes), as.list(mc$anchor1_genes))
+    other <- c(anchor_genes[i2], anchor_genes[i1])
     by_anchor <- split(other, factor(a, levels = seq_along(reg)))
     partner <- lapply(by_anchor, function(z) unique(unlist(z)))
     n_by_anchor <- tabulate(a, nbins = length(reg))
-    have_sym <- !is.null(mc$anchor1_symbols)
+    have_sym <- !is.null(mc$anchor1_symbols) && is.null(anchor_flank) && is.null(gene_ids)
     if (have_sym) {
         other_sym <- c(as.list(mc$anchor2_symbols), as.list(mc$anchor1_symbols))
         partner_sym <- lapply(split(other_sym, factor(a, levels = seq_along(reg))),
@@ -291,6 +328,11 @@ linkPeaksToGenes <- function(peak, loops) {
     hits <- suppressWarnings(findOverlaps(pg, reg, ignore.strand = TRUE))
     per_peak <- split(subjectHits(hits), factor(queryHits(hits), levels = seq_along(pg)))
     loop_genes <- lapply(per_peak, function(ids) unique(unlist(partner[ids])))
+    if (exclude_own_anchor) {
+        ## only anchors that are on a loop: a subset GInteractions keeps unused regions
+        own <- lapply(per_peak, function(ids) unique(unlist(anchor_genes[ids[n_by_anchor[ids] > 0]])))
+        loop_genes <- mapply(setdiff, loop_genes, own, SIMPLIFY = FALSE)
+    }
     n_loops <- vapply(per_peak, function(ids) sum(n_by_anchor[ids]), numeric(1))
 
     feature <- if (!is.null(pg$annotation)) .loop_feature(pg$annotation) else rep(NA_character_, length(pg))
@@ -303,6 +345,11 @@ linkPeaksToGenes <- function(peak, loops) {
     ## a self-defined GRanges TxDb keeps its own gene_id column instead of geneId
     nearest <- if (!is.null(pg$geneId)) as.character(pg$geneId) else
         if (!is.null(pg$gene_id)) as.character(pg$gene_id) else rep(NA_character_, length(pg))
+    if (!is.null(distal_distance)) {
+        nn <- .nearest_tss(pg, tss)
+        nearest <- nn$gene
+        in_promoter <- !is.na(nn$distance) & nn$distance <= distal_distance
+    }
     link <- ifelse(in_promoter, "promoter",
             ifelse(n_loops == 0, "no loop",
             ifelse(lengths(loop_genes) == 0, "loop, no gene",
@@ -312,16 +359,57 @@ linkPeaksToGenes <- function(peak, loops) {
     out <- data.frame(seqnames = as.character(GenomicRanges::seqnames(pg)),
                       start = GenomicRanges::start(pg), end = GenomicRanges::end(pg),
                       feature = feature, nearest_gene = nearest, stringsAsFactors = FALSE)
-    if (!is.null(pg$SYMBOL)) out$nearest_symbol <- as.character(pg$SYMBOL)
+    if (!is.null(pg$SYMBOL) && is.null(distal_distance)) out$nearest_symbol <- as.character(pg$SYMBOL)
     out$n_loops <- as.integer(n_loops)
     out$loop_genes <- vapply(loop_genes, paste, character(1), collapse = "/")
     if (have_sym) {
         out$loop_symbols <- vapply(per_peak, function(ids) paste(unique(unlist(partner_sym[ids])), collapse = "/"),
                                    character(1))
     }
+    if ((!is.null(anchor_flank) || !is.null(gene_ids) || !is.null(distal_distance)) && !is.null(annoDb)) {
+        sym <- .gene_symbols(unique(c(unlist(loop_genes), nearest)), TxDb, annoDb)
+        to_sym <- function(g) paste(unique(stats::na.omit(sym[g])), collapse = "/")
+        out$loop_symbols <- vapply(loop_genes, to_sym, character(1))
+        if (!is.null(distal_distance)) out$nearest_symbol <- unname(sym[nearest])
+    }
     out$link <- factor(link, levels = .link_classes)
     rownames(out) <- NULL
     out
+}
+
+## transcript starts (one per gene and position) of TxDb, EnsDb or a GRanges of features,
+## optionally only of `gene_ids`
+.tss_of <- function(TxDb, gene_ids = NULL) {
+    if (is(TxDb, "GRanges")) {
+        if (is.null(TxDb$gene_id)) stop("a GRanges `TxDb` needs a gene_id column.")
+        tss <- GenomicRanges::resize(GenomicRanges::granges(TxDb), 1, fix = "start")
+        tss$gene_id <- as.character(TxDb$gene_id)
+    } else {
+        tx <- GenomicFeatures::transcripts(TxDb, columns = "gene_id")
+        gid <- tx$gene_id
+        tss <- GenomicRanges::resize(GenomicRanges::granges(rep(tx, lengths(gid))), 1, fix = "start")
+        tss$gene_id <- as.character(unlist(gid))
+    }
+    tss <- tss[!is.na(tss$gene_id)]
+    if (!is.null(gene_ids)) tss <- tss[tss$gene_id %in% as.character(gene_ids)]
+    unique(tss)
+}
+
+## genes with a transcript start within each region extended by `flank` on both sides
+.genes_near <- function(reg, tss, flank) {
+    hits <- suppressWarnings(findOverlaps(reg + flank, tss, ignore.strand = TRUE))
+    g <- splitAsList(tss$gene_id[subjectHits(hits)], factor(queryHits(hits), levels = seq_along(reg)))
+    lapply(as.list(g), unique)
+}
+
+## gene of the nearest transcript start to each region centre, and the distance
+.nearest_tss <- function(x, tss) {
+    ctr <- GenomicRanges::resize(GenomicRanges::granges(x), 1, fix = "center")
+    d <- suppressWarnings(GenomicRanges::distanceToNearest(ctr, tss, ignore.strand = TRUE))
+    gene <- rep(NA_character_, length(x)); dist <- rep(NA_real_, length(x))
+    gene[queryHits(d)] <- tss$gene_id[subjectHits(d)]
+    dist[queryHits(d)] <- S4Vectors::mcols(d)$distance
+    list(gene = gene, distance = dist)
 }
 
 #' Plot annotated loops
