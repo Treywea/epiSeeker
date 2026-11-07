@@ -1,5 +1,16 @@
 # epiSeeker 1.1.4
 
++ Single-molecule modification data can be read: `readModCalls()` takes the per-read tables of
+  `ft extract --all` (fibertools, Fiber-seq: m6A, 5mC, nucleosomes, MSPs and FIREs) and of
+  `modkit extract full` / `extract calls` (any modBAM) and returns one range per call, with the
+  read, its haplotype and the source in the columns and `metadata()`; coordinates are made
+  1-based and calls without a reference position are counted, not kept. `summarizeModCalls()`
+  turns them into a `bmData` (coverage and fraction modified), and `readBedMethyl()` reads a
+  `modkit pileup` file, so `getBmMatrix()` and `plotBmProf()` work on both unchanged.
+  `modReadMatrix()` gives one value per read and region, `modCooccurrence()` tests whether two
+  regions open on the same molecules (Fisher's test on the reads spanning both) and
+  `plotModReads()` draws the reads over a region. BAM/CRAM modification tags are not decoded
+  in the package; the tables come from modkit or fibertools. (2026-11-07, Sat)
 + `enrichPeakOverlap()` without `background` says, once per session, that the p-values of a
   whole-genome null are anti-conservative for peaks concentrated in open chromatin (on 20
   ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the 1200 pairs were
