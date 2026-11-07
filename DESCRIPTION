@@ -35,6 +35,7 @@ Imports:
     clusterProfiler,
     dplyr,
     enrichplot,
+    InteractionSet,
     IRanges,
     GenomeInfoDb,
     GenomicRanges,
