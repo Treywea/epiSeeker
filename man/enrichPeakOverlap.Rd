@@ -51,18 +51,24 @@ becomes `2/(nShuffle+1)`; use a larger `nShuffle` and `set.seed()` for a
 reproducible result (issue #84 of ChIPseeker)}
 
 \item{background}{regions the target peaks are shuffled into under the null
-(a `GRanges` or a bed file, in the coordinates of `queryPeak`), for example
-open chromatin, mappable regions or, for RNA modifications, exons. Default
-`NULL` shuffles over whole chromosomes. Peaks of real assays sit in a small
-part of the genome, so two unrelated peak sets overlap far more than peaks
-spread over whole chromosomes would, and almost every target set comes out
-"significant"; shuffling within a background that matches the data removes
-that. When given, each target set gets its own null: its peaks are moved to
-random positions in the background, chosen by base pair, keeping their widths
-and the number of peaks per chromosome (peaks on a chromosome without
-background go anywhere in it), and
-p = (#\{null >= observed\} + 1) / (nShuffle + 1). With `symmetric = TRUE` the
-mirrored direction shuffles the query peaks within the background}
+  (a `GRanges` or a bed file, in the coordinates of `queryPeak`), for example
+  open chromatin, mappable regions or, for RNA modifications, exons. Default
+  `NULL` shuffles over whole chromosomes. Peaks of real assays sit in a small
+  part of the genome, so two unrelated peak sets overlap far more than peaks
+  spread over whole chromosomes would, and almost every target set comes out
+  "significant"; shuffling within a background that matches the data removes
+  that. When given, each target set gets its own null: its peaks are moved to
+  random positions in the background, chosen by base pair, keeping their widths
+  and the number of peaks per chromosome (peaks on a chromosome without
+  background go anywhere in it), and
+  p = (#\{null >= observed\} + 1) / (nShuffle + 1). With `symmetric = TRUE` the
+  mirrored direction shuffles the query peaks within the background
+
+  Without `background`, the first call of a session says so in a message (the
+  p-values of a whole-genome null are anti-conservative for peaks concentrated in open
+  chromatin: on 20 ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the
+  1200 pairs were significant). `verbose = FALSE` or
+  `options(epiSeeker.null_note = FALSE)` turns it off}
 }
 \value{
 a `peakOverlapResult`, which is a data.frame with one row per target peak set:
@@ -74,7 +80,9 @@ a `peakOverlapResult`, which is a data.frame with one row per target peak set:
   N_OL under the null, and `fold_enrichment` = N_OL / expected, which corrects for the
   size of each target set (and, with `background`, for where peaks can be). The p-value
   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
-  shared by most of them; rank by `fold_enrichment` or another effect size instead. The
+  shared by most of them; rank by `jaccard` instead (on those 20 ENCODE peak sets it put
+  the profiled factor first for 11 of 14, `fold_enrichment` for 3-4), and report
+  `fold_enrichment` as an effect size. The
   adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
   arguments the p-values were computed with are in `attr(, "params")`.
 }

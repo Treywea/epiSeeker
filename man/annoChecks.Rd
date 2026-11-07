@@ -24,7 +24,9 @@ a list with elements `build` and `dropped`, or `NULL`
     and example files annotated with their own build and with another one, the
     out-of-bound test raised no false alarm and found 132
     of 136 mismatched pairs; it can miss small sets (the four it missed had 50-150 peaks),
-    because only peaks near chromosome ends can fall outside them.
+    because only peaks near chromosome ends can fall outside them. `n_peaks` is the number
+    of peaks checked and `reliable` is `FALSE` below 200 of them; `show()` then says that
+    the build check is unreliable for this set (no warning is raised for that alone).
   \item `dropped`: peaks that were not annotated because `TxDb` has no feature on their
     sequence, per sequence and reason (`not in TxDb`, `named differently`, `no feature`).
 }
