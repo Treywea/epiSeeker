@@ -73,9 +73,19 @@ test_that("calls summarise to a bmData that the existing functions take", {
     b <- summarizeModCalls(x, type = "5mC", sampleName = "s")
     expect_s4_class(b, "bmData")
     expect_equal(SummarizedExperiment::assayNames(b), c("Cov", "Methylation"))
-    ## 5mC lists unmodified calls, so coverage = calls: 1501 has 2 calls, 1 modified (240 >= 128)
+    ## fibertools lists only calls above its ML filter -> coverage = reads spanning, of the strands
+    ## that gave 5mC calls: 1501 has calls from r1 (+, modified) and r2 (-), 1601 only from r2 (-)
     v <- SummarizedExperiment::assay(b, "Methylation")[GenomicRanges::start(b) == 1501, 1]
     expect_equal(unname(v), 0.5)
+    cv <- SummarizedExperiment::assay(b, "Cov")[, 1]
+    expect_equal(unname(cv[GenomicRanges::start(b) == 1501]), 2)
+    expect_equal(unname(cv[GenomicRanges::start(b) == 1601]), 1)
+    ## the same calls from a tool that lists unmodified calls -> coverage = calls
+    xm <- x; S4Vectors::metadata(xm)$modSource$format <- "modkit"
+    expect_true(epiSeeker:::.sm_lists_negatives(xm[xm$type == "5mC"]))
+    expect_false(epiSeeker:::.sm_lists_negatives(x[x$type == "5mC"]))
+    bm <- summarizeModCalls(xm, type = "5mC")
+    expect_equal(unname(SummarizedExperiment::assay(bm, "Cov")[GenomicRanges::start(bm) == 1501, 1]), 2)
     ## m6A of Fiber-seq lists only modified bases -> coverage = reads spanning the position
     expect_equal(epiSeeker:::.sm_lists_negatives(x[x$type == "m6A" & x$modified]), FALSE)
     a <- summarizeModCalls(x[x$type != "m6A" | x$modified], type = "m6A")
@@ -96,6 +106,26 @@ test_that("bedMethyl reads as bmData", {
     expect_equal(GenomicRanges::start(b), c(100, 150))
     expect_equal(unname(SummarizedExperiment::assay(b, "Methylation")[, 1]), c(0.8, 0.2))
     expect_equal(unname(SummarizedExperiment::assay(b, "Cov")[, 1]), c(10, 5))
+})
+
+test_that("modReadMatrix values by type, NA for reads not spanning the region", {
+    x <- readModCalls(ft_table())
+    rr <- GenomicRanges::GRanges(c("chr1:1101-1160", "chr1:1701-1800", "chr1:900-1100"))
+    m <- modReadMatrix(x, rr, type = "msp")
+    expect_equal(unname(m["r1", ]), c(1, 0, NA))
+    expect_equal(unname(m["r2", ]), c(0, 0.5, NA))
+    expect_equal(unname(modReadMatrix(x, rr[1], type = "nuc")[, 1]), c(0, 60 / 60))   # r2 nucleosome 1081-1227
+    ## fibertools (only calls above its ML filter): modified calls per kb
+    m6 <- GenomicRanges::GRanges("chr1:1101-1200")
+    expect_equal(unname(modReadMatrix(x, m6, type = "m6A")[, 1]), c(20, 0))
+    ## a table that lists unmodified calls: fraction modified, NA where a read has no call
+    xm <- x; S4Vectors::metadata(xm)$modSource$format <- "modkit"
+    expect_equal(unname(modReadMatrix(xm, m6, type = "m6A")[, 1]), c(2 / 3, NA))
+    m5 <- modReadMatrix(xm, GenomicRanges::GRanges(c("chr1:1450-1650", "chr1:1700-1800")), type = "5mC")
+    expect_equal(unname(m5[, 1]), c(1, 0.5))
+    expect_true(all(is.na(m5[, 2])))
+    ## plotModReads keeps the reads covering most of the region
+    expect_s3_class(plotModReads(x, GenomicRanges::GRanges("chr1:1001-2000"), max_reads = 1), "ggplot")
 })
 
 test_that("per-read matrix and co-occurrence go in the right direction", {

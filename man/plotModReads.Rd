@@ -22,7 +22,7 @@ plotModReads(
 
 \item{peaks}{optional `GRanges` drawn above the reads.}
 
-\item{max_reads}{at most this many reads are drawn (the first by start).}
+\item{max_reads}{at most this many reads are drawn: those covering most of `region`.}
 
 \item{order_by}{`"start"`, or `"open"` to sort reads by the fraction of the region covered by
 MSPs.}

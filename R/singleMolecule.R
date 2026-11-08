@@ -242,19 +242,28 @@ readBedMethyl <- function(file, mod = NULL, sampleName = NULL) {
 }
 
 ## does the table list every candidate base (calls), or only modified ones (positives)?
-.sm_lists_negatives <- function(x) any(!x$modified, na.rm = TRUE)
+## does the table list unmodified calls? `ft extract` keeps only calls at or above its ML filter
+## (125 of 255 by default), so a fibertools table never does, even though calls of 125-127 fall
+## under min_prob = 0.5
+.sm_lists_negatives <- function(x) {
+    if (identical(metadata(x)$modSource$format, "fibertools")) return(FALSE)
+    any(!x$modified, na.rm = TRUE)
+}
 
 #' Summarise per-read calls to bmData
 #'
 #' Counts, for each position with a call of `type`, how many reads cover it (`Cov`) and the
-#' fraction of them modified (`Methylation`). When the tool lists every tested base (5mC from
-#' PacBio or modkit), coverage is the number of calls at the position; when it lists only
-#' modified bases (Fiber-seq m6A), coverage is the number of reads spanning the position.
+#' fraction of them modified (`Methylation`). When the tool lists every tested base (modkit),
+#' coverage is the number of calls at the position; when it lists only calls above a threshold
+#' (fibertools: m6A and 5mC), coverage is the number of reads spanning the position -- for 5mC
+#' and 5hmC only reads of the strand that gave calls there (PacBio calls CpGs on the read's own
+#' strand, at the C on `+` reads and the G on `-` reads), for m6A reads of both strands (Fiber-seq
+#' reads carry m6A of both strands). Positions without any listed call are absent.
 #'
 #' @param x per-read calls from [readModCalls()].
 #' @param type a base-level type, e.g. `"5mC"` or `"m6A"`.
-#' @param coverage `"auto"` (calls when unmodified calls are present, otherwise reads), `"calls"`
-#'   or `"reads"`.
+#' @param coverage `"auto"` (reads for fibertools tables; otherwise calls when unmodified calls
+#'   are present, else reads), `"calls"` or `"reads"`.
 #' @param sampleName sample name.
 #' @return a `bmData` with `Cov` and `Methylation`.
 #' @export
@@ -272,7 +281,14 @@ summarizeModCalls <- function(x, type = "5mC", coverage = c("auto", "calls", "re
     } else {
         reads <- metadata(x)$reads
         rg <- GRanges(reads$chr, IRanges(reads$start, reads$end))
-        cov <- GenomicRanges::countOverlaps(pos, rg, ignore.strand = TRUE)
+        if (type == "m6A" || !all(reads$strand %in% c("+", "-"))) {
+            cov <- GenomicRanges::countOverlaps(pos, rg, ignore.strand = TRUE)
+        } else {
+            ks <- unique(paste(key, as.character(GenomicRanges::strand(y))))
+            ku <- key[!duplicated(key)]
+            cov <- (paste(ku, "+") %in% ks) * GenomicRanges::countOverlaps(pos, rg[reads$strand == "+"], ignore.strand = TRUE) +
+                (paste(ku, "-") %in% ks) * GenomicRanges::countOverlaps(pos, rg[reads$strand == "-"], ignore.strand = TRUE)
+        }
     }
     d <- data.frame(chr = as.character(GenomicRanges::seqnames(pos)), pos = GenomicRanges::start(pos),
                     Cov = cov, Methylation = nmod / cov, stringsAsFactors = FALSE)
@@ -284,7 +300,8 @@ summarizeModCalls <- function(x, type = "5mC", coverage = c("auto", "calls", "re
 #' One value per read and region, for reads that span the whole region (`NA` otherwise): for an
 #' interval type (`"msp"`, `"nuc"`) the fraction of the region the read covers with it (with
 #' `fire_only = TRUE`, only MSPs that are FIREs); for a base-level type the fraction of calls
-#' modified when the table lists unmodified calls, otherwise modified calls per kb.
+#' modified when the table lists unmodified calls (modkit), otherwise (fibertools) modified calls
+#' per kb.
 #'
 #' @param x per-read calls from [readModCalls()].
 #' @param regions a `GRanges`; names, if present, become column names.
@@ -301,22 +318,39 @@ modReadMatrix <- function(x, regions, type = "msp", fire_only = FALSE) {
     negatives <- !interval && .sm_lists_negatives(y)
     m <- matrix(NA_real_, nrow = length(rg), ncol = length(regions),
                 dimnames = list(reads$read_id, if (is.null(names(regions))) as.character(regions) else names(regions)))
-    for (j in seq_along(regions)) {
-        r <- regions[j]
-        spans <- which(GenomicRanges::start(rg) <= GenomicRanges::start(r) & GenomicRanges::end(rg) >= GenomicRanges::end(r) &
-                           as.character(GenomicRanges::seqnames(rg)) == as.character(GenomicRanges::seqnames(r)))
-        if (!length(spans)) next
-        yr <- y[y$read_id %in% reads$read_id[spans] & overlapsAny(y, r, ignore.strand = TRUE)]
-        for (i in spans) {
-            yi <- yr[yr$read_id == reads$read_id[i]]
-            m[i, j] <- if (interval) {
-                sum(GenomicRanges::width(GenomicRanges::intersect(GenomicRanges::reduce(yi, ignore.strand = TRUE), r,
-                                                                  ignore.strand = TRUE))) / GenomicRanges::width(r)
-            } else if (negatives) {
-                if (length(yi)) mean(yi$modified) else NA_real_
-            } else {
-                1000 * sum(yi$modified) / GenomicRanges::width(r)
-            }
+    ## (read i, region j) pairs where the read spans the whole region; values come from overlap
+    ## joins keyed by read id and region (a per-read loop took hours on a real 120-kb window)
+    sp <- findOverlaps(regions, rg, type = "within", ignore.strand = TRUE)
+    if (!length(sp)) return(m)
+    si <- subjectHits(sp)
+    sj <- queryHits(sp)
+    key <- paste(reads$read_id[si], sj, sep = "\r")
+    rw <- GenomicRanges::width(regions)
+    agg <- function(v, k, f) {
+        if (!length(v)) return(stats::setNames(numeric(0), character(0)))
+        a <- tapply(v, k, f)
+        stats::setNames(as.vector(a), names(a))
+    }
+    if (interval) {
+        yr <- unlist(GenomicRanges::reduce(split(GenomicRanges::granges(y), y$read_id), ignore.strand = TRUE))
+        ov <- findOverlaps(yr, regions, ignore.strand = TRUE)
+        q <- queryHits(ov)
+        s <- subjectHits(ov)
+        w <- pmin(GenomicRanges::end(yr)[q], GenomicRanges::end(regions)[s]) -
+            pmax(GenomicRanges::start(yr)[q], GenomicRanges::start(regions)[s]) + 1
+        v <- agg(w, paste(names(yr)[q], s, sep = "\r"), sum)[key]
+        v[is.na(v)] <- 0
+        m[cbind(si, sj)] <- v / rw[sj]
+    } else {
+        ov <- findOverlaps(y, regions, ignore.strand = TRUE)
+        k <- paste(y$read_id[queryHits(ov)], subjectHits(ov), sep = "\r")
+        mod <- y$modified[queryHits(ov)]
+        if (negatives) {
+            m[cbind(si, sj)] <- agg(mod, k, mean)[key]
+        } else {
+            v <- agg(mod, k, sum)[key]
+            v[is.na(v)] <- 0
+            m[cbind(si, sj)] <- 1000 * v / rw[sj]
         }
     }
     m
@@ -361,7 +395,7 @@ modCooccurrence <- function(x, region1, region2, type = "msp", fire_only = FALSE
 #' @param region a `GRanges` of length one.
 #' @param types call types to draw.
 #' @param peaks optional `GRanges` drawn above the reads.
-#' @param max_reads at most this many reads are drawn (the first by start).
+#' @param max_reads at most this many reads are drawn: those covering most of `region`.
 #' @param order_by `"start"`, or `"open"` to sort reads by the fraction of the region covered by
 #'   MSPs.
 #' @return a ggplot object.
@@ -375,6 +409,11 @@ plotModReads <- function(x, region, types = c("nuc", "msp", "m6A", "5mC"), peaks
     keep <- overlapsAny(rg, region, ignore.strand = TRUE)
     reads <- reads[keep, , drop = FALSE]
     if (!nrow(reads)) stop("no reads overlap `region`.")
+    if (nrow(reads) > max_reads) {
+        ## keep the reads covering most of the region, not the first by start (all clipped at its left edge)
+        cover <- pmin(reads$end, GenomicRanges::end(region)) - pmax(reads$start, GenomicRanges::start(region))
+        reads <- reads[order(-cover, reads$start)[seq_len(max_reads)], , drop = FALSE]
+    }
     if (order_by == "open") {
         open <- modReadMatrix(x[x$read_id %in% reads$read_id], region, type = "msp")
         reads$score <- open[match(reads$read_id, rownames(open)), 1]
