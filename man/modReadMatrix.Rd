@@ -22,5 +22,6 @@ a numeric matrix, reads by regions.
 One value per read and region, for reads that span the whole region (`NA` otherwise): for an
 interval type (`"msp"`, `"nuc"`) the fraction of the region the read covers with it (with
 `fire_only = TRUE`, only MSPs that are FIREs); for a base-level type the fraction of calls
-modified when the table lists unmodified calls, otherwise modified calls per kb.
+modified when the table lists unmodified calls (modkit), otherwise (fibertools) modified calls
+per kb.
 }

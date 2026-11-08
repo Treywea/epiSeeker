@@ -16,8 +16,8 @@ summarizeModCalls(
 
 \item{type}{a base-level type, e.g. `"5mC"` or `"m6A"`.}
 
-\item{coverage}{`"auto"` (calls when unmodified calls are present, otherwise reads), `"calls"`
-or `"reads"`.}
+\item{coverage}{`"auto"` (reads for fibertools tables; otherwise calls when unmodified calls
+are present, else reads), `"calls"` or `"reads"`.}
 
 \item{sampleName}{sample name.}
 }
@@ -26,7 +26,10 @@ a `bmData` with `Cov` and `Methylation`.
 }
 \description{
 Counts, for each position with a call of `type`, how many reads cover it (`Cov`) and the
-fraction of them modified (`Methylation`). When the tool lists every tested base (5mC from
-PacBio or modkit), coverage is the number of calls at the position; when it lists only
-modified bases (Fiber-seq m6A), coverage is the number of reads spanning the position.
+fraction of them modified (`Methylation`). When the tool lists every tested base (modkit),
+coverage is the number of calls at the position; when it lists only calls above a threshold
+(fibertools: m6A and 5mC), coverage is the number of reads spanning the position -- for 5mC
+and 5hmC only reads of the strand that gave calls there (PacBio calls CpGs on the read's own
+strand, at the C on `+` reads and the G on `-` reads), for m6A reads of both strands (Fiber-seq
+reads carry m6A of both strands). Positions without any listed call are absent.
 }
