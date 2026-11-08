@@ -1,5 +1,10 @@
 # epiSeeker 1.1.4
 
++ `annotateLoops()` takes `gene_ids` to restrict the genes recorded at the anchors (for example
+  to protein-coding genes); an anchor is then a promoter anchor only when it holds the promoter
+  of one of them, so pseudogenes and uncharacterised loci no longer make an anchor a promoter
+  anchor or appear among the gene hubs of `interpret(<loopAnno>)`, whose digest states the
+  restriction. The default is unchanged. (2026-11-08, Sun)
 + Single-molecule modification data can be read: `readModCalls()` takes the per-read tables of
   `ft extract --all` (fibertools, Fiber-seq: m6A, 5mC, nucleosomes, MSPs and FIREs) and of
   `modkit extract full` / `extract calls` (any modBAM) and returns one range per call, with the

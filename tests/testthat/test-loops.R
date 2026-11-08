@@ -78,6 +78,22 @@ test_that("annotateLoops marks promoter anchors with the tssRegion window and cl
     expect_identical(readRDS(f), la)
 })
 
+test_that("annotateLoops with gene_ids records only those genes and classes anchors by them", {
+    la <- suppressWarnings(suppressMessages(annotateLoops(mock_bedpe(), TxDb = mock_genes(),
+                                                          gene_ids = c("G1", "G2"), verbose = FALSE)))
+    mc <- S4Vectors::mcols(la@loops)
+    ## L3's G3 anchor is no longer a promoter anchor; L1 and L5 keep G2
+    expect_equal(as.character(mc$loop_class),
+                 c("promoter-distal", "distal-distal", "promoter-distal", "distal-distal", "promoter-distal"))
+    expect_false(any(c(unlist(mc$anchor1_genes), unlist(mc$anchor2_genes)) == "G3"))
+    expect_equal(as.list(mc$anchor2_genes)[[1]], "G2")
+    expect_equal(S4Vectors::metadata(la@loops)$geneFilter$n_gene_ids, 2L)
+    ## the default is unchanged
+    la0 <- suppressWarnings(suppressMessages(annotateLoops(mock_bedpe(), TxDb = mock_genes(), verbose = FALSE)))
+    expect_null(S4Vectors::metadata(la0@loops)$geneFilter)
+    expect_equal(la0@loopStat$n, c(1L, 2L, 2L))
+})
+
 test_that("linkPeaksToGenes compares loop genes with the nearest gene", {
     g <- mock_genes()
     la <- suppressWarnings(suppressMessages(annotateLoops(mock_bedpe(), TxDb = g, verbose = FALSE)))

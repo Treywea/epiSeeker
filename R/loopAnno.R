@@ -125,12 +125,19 @@ readLoops <- function(x) {
 #' than one. Each loop is then classed as promoter-promoter, promoter-distal or
 #' distal-distal.
 #'
+#' With `gene_ids` only those genes count (for example protein-coding genes, as in the loop
+#' figure of the epiSeeker paper): an anchor is a promoter anchor only when it holds the
+#' promoter of one of them, and only they are recorded as anchor genes. The ids given are kept
+#' in `metadata(<result>@loops)$geneFilter`.
+#'
 #' @param loops anything [readLoops()] reads
 #' @param TxDb `TxDb`, `EnsDb` or a `GRanges` of features with a `gene_id` column
 #' @param tssRegion TSS region, as in [annotateSeq()]
 #' @param level `"transcript"` or `"gene"`, as in [annotateSeq()]
 #' @param annoDb annotation package or `OrgDb`; adds gene symbols to the anchors and the
 #'   anchor genes
+#' @param gene_ids optional gene ids (as in `TxDb`) to restrict the anchor genes to, e.g.
+#'   protein-coding genes; `NULL` (default) keeps every gene of `TxDb`
 #' @param verbose logical
 #' @param ... further arguments to [annotateSeq()]
 #' @return a [loopAnno-class] object
@@ -149,7 +156,7 @@ readLoops <- function(x) {
 #' @importFrom IRanges promoters
 #' @export
 annotateLoops <- function(loops, TxDb = NULL, tssRegion = c(-3000, 3000), level = "transcript",
-                          annoDb = NULL, verbose = TRUE, ...) {
+                          annoDb = NULL, gene_ids = NULL, verbose = TRUE, ...) {
     gi <- readLoops(loops)
     if (!length(gi)) stop("there are no loops to annotate.")
     if (!is(TxDb, "GRanges")) TxDb <- loadTxDb(TxDb)
@@ -165,6 +172,12 @@ annotateLoops <- function(loops, TxDb = NULL, tssRegion = c(-3000, 3000), level 
     if (!is.null(ag$annotation)) feature[ag$region_id] <- .loop_feature(ag$annotation)
 
     genes <- .anchor_promoter_genes(reg, TxDb, tssRegion, level)
+    if (!is.null(gene_ids)) {
+        keep <- unique(as.character(gene_ids))
+        ## element-wise: base `%in%` on a List matches whole elements, not the ids inside them
+        genes <- genes[relist(unlist(genes, use.names = FALSE) %in% keep, genes)]
+        metadata(gi)$geneFilter <- list(n_gene_ids = length(keep))
+    }
     promoter <- lengths(genes) > 0
     i1 <- anchorIds(gi, type = "first")
     i2 <- anchorIds(gi, type = "second")

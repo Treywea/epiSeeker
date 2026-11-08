@@ -10,6 +10,7 @@ annotateLoops(
   tssRegion = c(-3000, 3000),
   level = "transcript",
   annoDb = NULL,
+  gene_ids = NULL,
   verbose = TRUE,
   ...
 )
@@ -26,6 +27,9 @@ annotateLoops(
 \item{annoDb}{annotation package or `OrgDb`; adds gene symbols to the anchors and the
 anchor genes}
 
+\item{gene_ids}{optional gene ids (as in `TxDb`) to restrict the anchor genes to, e.g.
+protein-coding genes; `NULL` (default) keeps every gene of `TxDb`}
+
 \item{verbose}{logical}
 
 \item{...}{further arguments to [annotateSeq()]}
@@ -40,6 +44,12 @@ anchor when it overlaps the promoter window (`tssRegion`) of a transcript (or, w
 records the genes of those promoters, since an anchor of several kilobases can hold more
 than one. Each loop is then classed as promoter-promoter, promoter-distal or
 distal-distal.
+}
+\details{
+With `gene_ids` only those genes count (for example protein-coding genes, as in the loop
+figure of the epiSeeker paper): an anchor is a promoter anchor only when it holds the
+promoter of one of them, and only they are recorded as anchor genes. The ids given are kept
+in `metadata(<result>@loops)$geneFilter`.
 }
 \examples{
 \donttest{
