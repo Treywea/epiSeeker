@@ -400,3 +400,25 @@ test_that("method = \"fisher\" needs a background and reports the odds ratio and
     attr(res, "params")$rank_by <- "odds_ratio"
     expect_match(epiSeeker:::.digest_overlap(res, 30)$text, "ranked by odds_ratio (jaccard", fixed = TRUE)
 })
+
+test_that("effect sizes and N_OL from overlap pairs equal those from union() and intersect()", {
+    set.seed(9)
+    rg <- function(n, chr = c("chr1", "chr2")) GRanges(sample(chr, n, replace = TRUE),
+        IRanges(sample(2e5, n), width = sample(20:900, n, replace = TRUE)),
+        strand = sample(c("+", "-", "*"), n, replace = TRUE))
+    q <- rg(300)
+    tl <- list(a = rg(200), b = c(q[1:50], rg(100)), c = rg(50, "chr3"),
+               d = GRanges("chr1", IRanges(c(1000, 1100), c(1099, 1200))))     # adjacent pair
+    es <- epiSeeker:::.overlap_effect_size(q, tl)
+    old <- vapply(tl, function(tt) {
+        qr <- reduce(q, ignore.strand = TRUE); tr <- reduce(tt, ignore.strand = TRUE)
+        u <- sum(as.numeric(width(suppressWarnings(union(qr, tr, ignore.strand = TRUE)))))
+        i <- sum(as.numeric(width(suppressWarnings(intersect(qr, tr, ignore.strand = TRUE)))))
+        c(i / u, mean(overlapsAny(q, tt, ignore.strand = TRUE)), mean(overlapsAny(tt, q, ignore.strand = TRUE)))
+    }, numeric(3))
+    expect_equal(es$jaccard, unname(old[1, ]))
+    expect_equal(es$frac_query, unname(old[2, ]))
+    expect_equal(es$frac_target, unname(old[3, ]))
+    expect_equal(unname(epiSeeker:::.n_intersect(q, tl)),
+                 unname(vapply(tl, function(tt) length(suppressWarnings(intersect(q, tt))), numeric(1))))
+})

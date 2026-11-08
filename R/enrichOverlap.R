@@ -274,7 +274,7 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
             tSample = tSample,
             qLen = length(query.gr),
             tLen = unlist(lapply(target.gr, length)),
-            N_OL = vapply(target.gr, function(tt) length(intersect(query.gr, tt)), numeric(1)),
+            N_OL = .n_intersect(query.gr, target.gr),
             pvalue = ft$pvalue,
             p.adjust = p.adjust(ft$pvalue, method = pAdjustMethod),
             expected = ft$expected,
@@ -388,14 +388,24 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 ## overlap the other set. Strand is ignored. Unlike the p-value, whose smallest value
 ## 1/(nShuffle+1) is shared by most target sets, these can rank the targets.
 .overlap_effect_size <- function(query.gr, target.gr) {
-    q <- GenomicRanges::reduce(query.gr, ignore.strand = TRUE)
+    ## computed from the overlapping pairs of the reduced sets: within a reduced set no two
+    ## regions overlap or touch, so the pairwise intersections are the pieces of
+    ## intersect(q, t), and union = |q| + |t| - intersection (same values as with
+    ## union()/intersect(), much faster on many target sets)
+    unstrand <- function(gr) { strand(gr) <- "*"; granges(gr) }
+    qu <- unstrand(query.gr)
+    q <- GenomicRanges::reduce(qu)
+    wq <- sum(as.numeric(width(q)))
     one <- function(tt) {
-        t <- GenomicRanges::reduce(tt, ignore.strand = TRUE)
-        u <- sum(as.numeric(GenomicRanges::width(GenomicRanges::union(q, t, ignore.strand = TRUE))))
-        i <- sum(as.numeric(GenomicRanges::width(GenomicRanges::intersect(q, t, ignore.strand = TRUE))))
+        tu <- unstrand(tt)
+        t <- GenomicRanges::reduce(tu)
+        h <- GenomicRanges::findOverlaps(q, t)
+        i <- sum(as.numeric(width(GenomicRanges::pintersect(q[S4Vectors::queryHits(h)],
+                                                          t[S4Vectors::subjectHits(h)]))))
+        u <- wq + sum(as.numeric(width(t))) - i
         c(jaccard = if (u > 0) i / u else NA_real_,
-          frac_query = if (length(query.gr)) mean(IRanges::overlapsAny(query.gr, tt, ignore.strand = TRUE)) else NA_real_,
-          frac_target = if (length(tt)) mean(IRanges::overlapsAny(tt, query.gr, ignore.strand = TRUE)) else NA_real_)
+          frac_query = if (length(qu)) mean(IRanges::overlapsAny(qu, t)) else NA_real_,
+          frac_target = if (length(tu)) mean(IRanges::overlapsAny(tu, q)) else NA_real_)
     }
     ## a target set on other chromosomes simply shares nothing (jaccard 0); GenomicRanges
     ## warns "no sequence levels in common" for it, which says nothing the 0 does not
@@ -404,6 +414,21 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
     })
     list(jaccard = unname(m["jaccard", ]), frac_query = unname(m["frac_query", ]),
          frac_target = unname(m["frac_target", ]))
+}
+
+## length(intersect(query.gr, tt)) for every target set, from the overlapping pairs of the
+## (strand-wise) reduced sets; as in intersect(), "*" pairs only with "*", "+" with "+"
+.n_intersect <- function(query.gr, target.gr) {
+    q <- GenomicRanges::reduce(granges(query.gr))
+    qs <- as.character(strand(q))
+    one <- function(tt) {
+        t <- GenomicRanges::reduce(granges(tt))
+        h <- GenomicRanges::findOverlaps(q, t, ignore.strand = TRUE)
+        as.numeric(sum(qs[S4Vectors::queryHits(h)] == as.character(strand(t))[S4Vectors::subjectHits(h)]))
+    }
+    withCallingHandlers(vapply(target.gr, one, numeric(1)), warning = function(w) {
+        if (grepl("no sequence levels in common", conditionMessage(w))) invokeRestart("muffleWarning")
+    })
 }
 
 setOldClass(c("peakOverlapResult", "data.frame"))
