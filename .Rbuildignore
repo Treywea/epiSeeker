@@ -19,3 +19,4 @@ gh-pages
 .github
 .trae
 .gitignore
+^03-Anno_files$
