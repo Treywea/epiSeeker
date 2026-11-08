@@ -40,6 +40,8 @@ export(groupInfo)
 export(linkPeaksToGenes)
 export(makeBmDataFromData)
 export(makeBmDataFromFiles)
+export(modCooccurrence)
+export(modReadMatrix)
 export(parse_peak)
 export(peaksToGroups)
 export(plotAnnoBar)
@@ -51,17 +53,21 @@ export(plotDistToTSS)
 export(plotGeneTrack)
 export(plotLoopAnno)
 export(plotLoopLinks)
+export(plotModReads)
 export(plotMotifProf)
 export(plotPeakHeatmap)
 export(plotPeakProf)
 export(plotSpatialGroups)
+export(readBedMethyl)
 export(readFragments)
 export(readLoops)
+export(readModCalls)
 export(readPeakFile)
 export(readSpotPositions)
 export(rel)
 export(seq2gene)
 export(shuffle)
+export(summarizeModCalls)
 export(vennpie)
 export(vennplot)
 export(vennplot.peakfile)
@@ -121,6 +127,7 @@ importFrom(IRanges,
   CharacterList,
   IRanges,
   findOverlaps,
+  overlapsAny,
   promoters,
   subsetByOverlaps
 )
@@ -195,8 +202,10 @@ importFrom(ggplot2,
   geom_curve,
   geom_hline,
   geom_line,
+  geom_point,
   geom_rect,
   geom_ribbon,
+  geom_segment,
   geom_text,
   geom_tile,
   geom_vline,
@@ -206,6 +215,7 @@ importFrom(ggplot2,
   labs,
   rel,
   scale_color_manual,
+  scale_colour_manual,
   scale_fill_brewer,
   scale_fill_distiller,
   scale_fill_gradient2,

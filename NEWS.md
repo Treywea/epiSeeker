@@ -1,5 +1,16 @@
 # epiSeeker 1.1.4
 
++ Single-molecule modification data can be read: `readModCalls()` takes the per-read tables of
+  `ft extract --all` (fibertools, Fiber-seq: m6A, 5mC, nucleosomes, MSPs and FIREs) and of
+  `modkit extract full` / `extract calls` (any modBAM) and returns one range per call, with the
+  read, its haplotype and the source in the columns and `metadata()`; coordinates are made
+  1-based and calls without a reference position are counted, not kept. `summarizeModCalls()`
+  turns them into a `bmData` (coverage and fraction modified), and `readBedMethyl()` reads a
+  `modkit pileup` file, so `getBmMatrix()` and `plotBmProf()` work on both unchanged.
+  `modReadMatrix()` gives one value per read and region, `modCooccurrence()` tests whether two
+  regions open on the same molecules (Fisher's test on the reads spanning both) and
+  `plotModReads()` draws the reads over a region. BAM/CRAM modification tags are not decoded
+  in the package; the tables come from modkit or fibertools. (2026-11-07, Sat)
 + Single-cell and spatial chromatin data enter as groups of a `csAnnoList`. `readFragments()`
   reads a fragments file; `fragmentsToGroups()` sums the fragments of the cells or spots of each
   cluster or spatial domain in tiles and keeps the group-specific tiles, matching barcodes with
