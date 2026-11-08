@@ -101,7 +101,10 @@ a `peakOverlapResult`, which is a data.frame with one row per target peak set:
   the profiled factor first for 11 of 14, `fold_enrichment` for 3-4), and report
   `fold_enrichment` as an effect size. With `background` also `odds_ratio`, the
   Mantel-Haenszel odds ratio of the region-level table described under `method` (`NA`
-  without a background). The
+  without a background); against the union of those reference sets as background it put
+  the profiled factor first for 13 of 14, but in simulation it ranked a weakly shared
+  true set below related or small sets more often than `jaccard`, so `rank_by` stays
+  `jaccard`. The
   adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
   arguments the p-values were computed with, and the statistic the results should be
   ranked by (`rank_by`), are in `attr(, "params")`.

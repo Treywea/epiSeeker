@@ -3,15 +3,22 @@
 + `enrichPeakOverlap(method = "fisher")` tests every target set against the `background` as a
   universe, without permutations: the units are the background regions (overlapping ones merged,
   adjacent ones such as tiles kept apart) plus every query region outside them (so the table stays
-  consistent, where LOLA's raw mode fails with "Negative b entry"), and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit width (default
-  50) gives the p-value. Stratifying by width keeps the test calibrated on universes of unequal
-  region sizes, on which an unstratified region-level test is anti-conservative. With a background
-  the result also has `odds_ratio`, the Mantel-Haenszel odds ratio of that table, and
-  `attr(, "params")$rank_by` names the statistic to rank by, which the `interpret()` digest uses.
-  The permutation test with `background` is faster: positions are drawn from precomputed cumulative
-  widths and all target sets are shuffled and counted in one pass per permutation (same statistic,
-  strand ignored). The default (`method = "permutation"`, `background = NULL`) is unchanged.
-  [NUMBERS] (2026-11-08, Sun)
+  consistent, where LOLA's raw mode fails with "Negative b entry"), and the one-sided
+  Cochran-Mantel-Haenszel test over `strata` bins of unit width (default 50) gives the p-value.
+  Stratifying by width keeps the test calibrated on universes of unequal region sizes: with peaks
+  placed at random within a background of promoters and enhancers, 5.4% of the tests had p < 0.05
+  (24.7% without strata, on development data); it has less power than the permutation test for
+  weak overlaps. With a background the result also has `odds_ratio`, the Mantel-Haenszel odds
+  ratio of that table; `attr(, "params")$rank_by` names the statistic to rank by, which the
+  `interpret()` digest uses and states. It stays `jaccard`: `odds_ratio` put the profiled factor
+  first for 13 of 14 ENCODE peak sets against a universe of the 60 reference sets (`jaccard` 11),
+  but in simulation it put the true set first less often at 2% shared peaks (0.78 against 1.00;
+  related and small random sets came first) and more often at 1% (0.40 against 0.02).
+  The permutation test with `background` is about four times faster (positions are drawn from
+  precomputed cumulative widths and all target sets are shuffled and counted in one pass per
+  permutation; same statistic, strand ignored), and `N_OL` and the effect sizes are computed from
+  overlap pairs. The default (`method = "permutation"`, `background = NULL`) gives the same
+  numbers as before. (2026-11-09, Mon)
 + `enrichPeakOverlap()` without `background` says, once per session, that the p-values of a
   whole-genome null are anti-conservative for peaks concentrated in open chromatin (on 20
   ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the 1200 pairs were
