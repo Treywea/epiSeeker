@@ -187,13 +187,18 @@
     ov <- overlap
     total <- nrow(ov)
     if ("p.adjust" %in% names(ov)) ov <- ov[!is.na(ov$p.adjust) & ov$p.adjust < 0.05, , drop = FALSE]
-    rank_by <- intersect(.overlap_rank_columns, names(ov))[1]
+    prm <- attr(overlap, "params")
+    ## the statistic enrichPeakOverlap() recorded; otherwise the first available column
+    rank_by <- if (!is.null(prm$rank_by) && prm$rank_by %in% names(ov) &&
+                   !all(is.na(ov[[prm$rank_by]]))) prm$rank_by else
+        intersect(.overlap_rank_columns, names(ov))[1]
     if (!is.na(rank_by)) ov <- ov[order(-ov[[rank_by]]), , drop = FALSE]
     ov$label <- if ("label" %in% names(ov)) as.character(ov$label) else .gsm_label(ov$tSample)
     ov$rank <- seq_len(nrow(ov))
     k <- min(nrow(ov), n_overlap)
     shown <- ov[seq_len(k), , drop = FALSE]
-    cols <- intersect(c("N_OL", setdiff(.overlap_rank_columns, "N_OL"), "p.adjust"), names(shown))
+    cols <- intersect(c("N_OL", setdiff(.overlap_rank_columns, "N_OL"), "odds_ratio", "p.adjust"), names(shown))
+    cols <- cols[vapply(cols, function(cl) !all(is.na(shown[[cl]])), TRUE)]
     ## counts are printed whole, ratios and p-values to 3 significant digits
     fmt <- lapply(cols, function(cl) {
         v <- if (cl == "N_OL") format(shown[[cl]], scientific = FALSE, trim = TRUE) else signif(shown[[cl]], 3)
@@ -201,19 +206,21 @@
     })
     vals <- if (length(cols)) do.call(paste, c(fmt, sep = ", ")) else rep("", k)
     lines <- paste0(shown$rank, "\t", shown$tSample, "\t", shown$label, "\t", vals)
-    prm <- attr(overlap, "params")
     null <- if (is.null(prm$null) || is.na(prm$null)) {
         if (isTRUE(prm$pool)) "pooled over reference sets, shuffled over whole chromosomes" else NA_character_
     } else prm$null
-    how <- if (is.null(prm)) "" else paste0(
+    how <- if (is.null(prm)) "" else if (identical(prm$method, "fisher")) paste0(
+        "p-values from a ", null, "; no permutations\n") else paste0(
         "p-values from ", prm$nShuffle, " shuffles; null: ", if (is.na(null)) "not recorded" else null,
         "; the smallest possible p is ", signif(1 / (prm$nShuffle + 1), 3), "\n",
         if (!is.na(null) && grepl("whole chromosomes", null))
             paste("A whole-genome null is anti-conservative for peaks in open chromatin: most reference",
                   "sets pass p.adjust < 0.05, so rely on the ranking, not on the p-values.\n") else "")
-    ranking <- if (!is.na(rank_by) && rank_by == "jaccard")
-        "jaccard (fold_enrichment is reported as an effect size, not used for ranking)" else
-        if (is.na(rank_by)) "input order" else rank_by
+    others <- setdiff(intersect(c("jaccard", "odds_ratio", "fold_enrichment"), cols), rank_by)
+    ranking <- if (is.na(rank_by)) "input order" else if (length(others)) {
+        sprintf("%s (%s %s reported as %s, not used for ranking)", rank_by, paste(others, collapse = " and "),
+                if (length(others) > 1) "are" else "is", if (length(others) > 1) "effect sizes" else "an effect size")
+    } else rank_by
     text <- paste0(
         "## Overlap with reference samples (", k, " of ", nrow(ov), " with p.adjust < 0.05, ",
         total, " tested; ranked by ", ranking, ")\n",

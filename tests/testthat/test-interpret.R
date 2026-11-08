@@ -178,7 +178,8 @@ test_that("an overlap table alone points to the csAnno method, and its test is d
                  fixed = TRUE)
     expect_match(txt, "smallest possible p is 0.000999", fixed = TRUE)
     expect_match(txt, "rely on the ranking, not on the p-values", fixed = TRUE)
-    expect_match(txt, "ranked by jaccard (fold_enrichment is reported as an effect size", fixed = TRUE)
+    ## only columns the table has are named as effect sizes
+    expect_match(txt, "ranked by jaccard)", fixed = TRUE)
     ## the null recorded by enrichPeakOverlap() is stated, and a background null gets no caution
     attr(ov, "params") <- list(nShuffle = 100, pool = TRUE, null = "per target set, shuffled within background")
     txt <- epiSeeker:::.digest_overlap(ov, 30)$text
@@ -187,6 +188,8 @@ test_that("an overlap table alone points to the csAnno method, and its test is d
     ## ranking stays on jaccard when fold_enrichment is present
     ov$fold_enrichment <- c(1, 50, 2, 3)
     expect_equal(epiSeeker:::.digest_overlap(ov, 30)$table$label, c("CTCF", "RAD21", "CREB1"))
+    expect_match(epiSeeker:::.digest_overlap(ov, 30)$text,
+                 "ranked by jaccard (fold_enrichment is reported as an effect size", fixed = TRUE)
 })
 
 test_that("the digest reports what the checks of annotateSeq found", {

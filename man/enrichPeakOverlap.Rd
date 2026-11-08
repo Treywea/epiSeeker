@@ -15,7 +15,9 @@ enrichPeakOverlap(
   mc.cores = detectCores() - 1,
   verbose = TRUE,
   symmetric = FALSE,
-  background = NULL
+  background = NULL,
+  method = c("permutation", "fisher"),
+  strata = 50
 )
 }
 \arguments{
@@ -69,6 +71,21 @@ reproducible result (issue #84 of ChIPseeker)}
   chromatin: on 20 ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the
   1200 pairs were significant). `verbose = FALSE` or
   `options(epiSeeker.null_note = FALSE)` turns it off}
+
+\item{method}{`"permutation"` (default) or `"fisher"`. `"fisher"` needs `background`,
+which it uses as the universe, and makes no permutations (`nShuffle` is ignored): the
+units are the background regions (overlapping ones merged, adjacent ones kept apart, so
+tiles stay tiles) plus every query region that overlaps
+none of them; for each target set the units hit by both sets, by one or by neither form
+a 2x2 table, and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit
+width gives the p-value (with `strata = 1`, Fisher's exact test). Stratifying by width
+matters: wide units are hit by both sets more often by chance, which makes an
+unstratified region-level test (as LOLA's) anti-conservative on universes of unequal
+region sizes. It is much faster than the permutation test}
+
+\item{strata}{number of bins of unit width (quantiles of log width) for the region-level
+test and the `odds_ratio` column; default 50 (units of identical width share a bin, so
+there can be fewer)}
 }
 \value{
 a `peakOverlapResult`, which is a data.frame with one row per target peak set:
@@ -82,9 +99,15 @@ a `peakOverlapResult`, which is a data.frame with one row per target peak set:
   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
   shared by most of them; rank by `jaccard` instead (on those 20 ENCODE peak sets it put
   the profiled factor first for 11 of 14, `fold_enrichment` for 3-4), and report
-  `fold_enrichment` as an effect size. The
+  `fold_enrichment` as an effect size. With `background` also `odds_ratio`, the
+  Mantel-Haenszel odds ratio of the region-level table described under `method` (`NA`
+  without a background); against the union of those reference sets as background it put
+  the profiled factor first for 13 of 14, but in simulation it ranked a weakly shared
+  true set below related or small sets more often than `jaccard`, so `rank_by` stays
+  `jaccard`. The
   adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
-  arguments the p-values were computed with are in `attr(, "params")`.
+  arguments the p-values were computed with, and the statistic the results should be
+  ranked by (`rank_by`), are in `attr(, "params")`.
 }
 \description{
 calculate overlap significant of ChIP experiments based on the genome coordinations
