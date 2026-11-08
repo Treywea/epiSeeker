@@ -74,7 +74,8 @@ reproducible result (issue #84 of ChIPseeker)}
 
 \item{method}{`"permutation"` (default) or `"fisher"`. `"fisher"` needs `background`,
 which it uses as the universe, and makes no permutations (`nShuffle` is ignored): the
-units are the regions of the reduced background plus every query region that overlaps
+units are the background regions (overlapping ones merged, adjacent ones kept apart, so
+tiles stay tiles) plus every query region that overlaps
 none of them; for each target set the units hit by both sets, by one or by neither form
 a 2x2 table, and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit
 width gives the p-value (with `strata = 1`, Fisher's exact test). Stratifying by width

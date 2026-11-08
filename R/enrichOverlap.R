@@ -179,7 +179,8 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   `options(epiSeeker.null_note = FALSE)` turns it off
 #' @param method `"permutation"` (default) or `"fisher"`. `"fisher"` needs `background`,
 #'   which it uses as the universe, and makes no permutations (`nShuffle` is ignored): the
-#'   units are the regions of the reduced background plus every query region that overlaps
+#'   units are the background regions (overlapping ones merged, adjacent ones kept apart, so
+#'   tiles stay tiles) plus every query region that overlaps
 #'   none of them; for each target set the units hit by both sets, by one or by neither form
 #'   a 2x2 table, and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit
 #'   width gives the p-value (with `strata = 1`, Fisher's exact test). Stratifying by width
@@ -438,7 +439,8 @@ setOldClass(c("peakOverlapResult", "data.frame"))
 }
 
 ## Region-level 2x2 of every target set against a universe (LOLA's design), stratified by
-## the width of the universe regions. Units are the regions of reduce(background) plus every
+## the width of the universe regions. Units are the regions of reduce(background,
+## min.gapwidth = 0) plus every
 ## query region that overlaps none of them, so each query region falls in a unit and the
 ## counts are consistent (LOLA's raw mode fails with "Negative b entry" when query regions
 ## lie outside the universe). A unit is hit when it overlaps at least one region of the set
@@ -451,7 +453,10 @@ setOldClass(c("peakOverlapResult", "data.frame"))
 .overlap_fisher <- function(query.gr, target.gr, background, strata = 50) {
     unstrand <- function(gr) { strand(gr) <- "*"; granges(gr) }
     bg <- if (is(background, "GRanges")) background else loadPeak(background)
-    units <- GenomicRanges::reduce(unstrand(bg))
+    ## overlapping background regions are merged, adjacent ones are not: a universe of
+    ## genome tiles must stay one unit per tile (merging adjacent tiles left one unit per
+    ## chromosome)
+    units <- GenomicRanges::reduce(unstrand(bg), min.gapwidth = 0L)
     q <- unstrand(query.gr)
     out_q <- !IRanges::overlapsAny(q, units)
     if (any(out_q)) {

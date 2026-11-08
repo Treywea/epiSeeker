@@ -1,9 +1,9 @@
 # epiSeeker 1.1.4
 
 + `enrichPeakOverlap(method = "fisher")` tests every target set against the `background` as a
-  universe, without permutations: the units are the reduced background regions plus every query
-  region outside them (so the table stays consistent, where LOLA's raw mode fails with "Negative b
-  entry"), and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit width (default
+  universe, without permutations: the units are the background regions (overlapping ones merged,
+  adjacent ones such as tiles kept apart) plus every query region outside them (so the table stays
+  consistent, where LOLA's raw mode fails with "Negative b entry"), and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit width (default
   50) gives the p-value. Stratifying by width keeps the test calibrated on universes of unequal
   region sizes, on which an unstratified region-level test is anti-conservative. With a background
   the result also has `odds_ratio`, the Mantel-Haenszel odds ratio of that table, and

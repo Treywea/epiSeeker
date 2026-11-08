@@ -339,6 +339,17 @@ test_that("the region-level test works on a universe of tens of thousands of uni
     }
 })
 
+test_that("adjacent universe regions stay separate units, overlapping ones are merged", {
+    tiles <- GRanges("chr1", IRanges(seq(1, by = 1000, length.out = 100), width = 1000))
+    q <- GRanges("chr1", IRanges(c(1500, 30500), width = 100))
+    t <- GRanges("chr1", IRanges(c(1550, 60500), width = 100))
+    ft <- epiSeeker:::.overlap_fisher(q, list(t), tiles, strata = 1)
+    expect_equal(ft$units, 100)
+    expect_equal(ft$a, 1)
+    ov <- c(tiles[1:10], GRanges("chr1", IRanges(500, 1500)))
+    expect_equal(epiSeeker:::.overlap_fisher(q, list(t), ov, strata = 1)$units, 9 + 1)   # tiles 1-2 merged; q[2] adds one
+})
+
 test_that("query regions outside the universe become units, so the table stays consistent", {
     bg <- GRanges("chr1", IRanges(c(1e5, 2e5, 3e5), width = 1000))
     q <- GRanges("chr1", IRanges(c(1e5 + 10, 5e5, 6e5), width = 100))     # two outside
