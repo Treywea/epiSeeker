@@ -1,5 +1,14 @@
 # epiSeeker 1.1.4
 
++ Single-cell and spatial chromatin data enter as groups of a `csAnnoList`. `readFragments()`
+  reads a fragments file; `fragmentsToGroups()` sums the fragments of the cells or spots of each
+  cluster or spatial domain in tiles and keeps the group-specific tiles, matching barcodes with
+  or without the `-1` suffix of fragments files; `peaksToGroups()` takes per-group peaks or the
+  marker tables of ArchR, Signac and 10x; `annotateGroups()` annotates every group and records
+  the resolution, the number of cells or spots and spot coordinates in `metadata()`, read with
+  `groupInfo()`. `readSpotPositions()` and `plotSpatialGroups()` read and plot spot positions.
+  The clustering itself stays with the upstream tools. `interpret()` states the resolution and
+  the cells or spots behind every group. No new class and no new dependency. (2026-11-07, Sat)
 + `interpret()` reads a `bmData` and a `loopAnno` (experimental: neither has been compared
   with a baseline that uses no model), so every group -- interval, base and pair -- has a
   method on the shared skeleton. The `bmData` digest merges sites into clusters and reports

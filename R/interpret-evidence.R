@@ -94,11 +94,25 @@
         "Regions: ", n, " (annotated at ", x@level, " level, TSS region ",
         x@tssRegion[1], " to ", x@tssRegion[2], " bp)\n",
         "Genome: ", .source_line(x), "\n",
+        .group_line(list(x)),
         .checks_line(x),
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
         "Context: ", if (is.null(context)) "not given" else context, "\n",
         "Question: ", if (is.null(question)) "none" else question
     )
+}
+
+## What the groups are, from annotateGroups(): "Resolution: spatial; members per group: A 812
+## spots, B 640 spots". A pseudo-bulk of 20 cells is weaker evidence than one of 2,000, so the
+## model is told. Empty for bulk objects and objects not made by annotateGroups().
+.group_line <- function(x) {
+    gi <- groupInfo(x)
+    if (all(is.na(gi$resolution))) return("")
+    res <- unique(stats::na.omit(gi$resolution))
+    unit <- if (identical(res, "spatial")) " spots" else if (identical(res, "single-cell")) " cells" else ""
+    mem <- ifelse(is.na(gi$n_members), "not recorded", paste0(format(gi$n_members, big.mark = ",", trim = TRUE), unit))
+    paste0("Resolution: ", paste(res, collapse = ", "), "; pseudo-bulk of ",
+           if (nrow(gi) == 1) mem else paste0(gi$group, " ", mem, collapse = ", "), "\n")
 }
 
 ## What the checks of annotateSeq() found (annoChecks()), as one line of the overview, so that
@@ -277,6 +291,7 @@
     sections$overview <- paste0(
         "## Overview\n",
         "Groups: ", paste0(grp, " (", vapply(per, function(p) nrow(p$df), 0), " regions)", collapse = ", "), "\n",
+        .group_line(x),
         "Genome: ", paste(unique(vapply(x, .source_line, "")), collapse = " | "), "\n",
         paste(vapply(grp, function(g) .checks_line(x[[g]], prefix = paste0("Checks (", g, "): ")), ""),
               collapse = ""),
