@@ -414,7 +414,7 @@ test_that("effect sizes and N_OL from overlap pairs equal those from union() and
         qr <- reduce(q, ignore.strand = TRUE); tr <- reduce(tt, ignore.strand = TRUE)
         u <- sum(as.numeric(width(suppressWarnings(union(qr, tr, ignore.strand = TRUE)))))
         i <- sum(as.numeric(width(suppressWarnings(intersect(qr, tr, ignore.strand = TRUE)))))
-        c(i / u, mean(overlapsAny(q, tt, ignore.strand = TRUE)), mean(overlapsAny(tt, q, ignore.strand = TRUE)))
+        suppressWarnings(c(i / u, mean(overlapsAny(q, tt, ignore.strand = TRUE)), mean(overlapsAny(tt, q, ignore.strand = TRUE))))
     }, numeric(3))
     expect_equal(es$jaccard, unname(old[1, ]))
     expect_equal(es$frac_query, unname(old[2, ]))
