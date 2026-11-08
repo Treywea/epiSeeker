@@ -177,6 +177,18 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   chromatin: on 20 ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the
 #'   1200 pairs were significant). `verbose = FALSE` or
 #'   `options(epiSeeker.null_note = FALSE)` turns it off
+#' @param method `"permutation"` (default) or `"fisher"`. `"fisher"` needs `background`,
+#'   which it uses as the universe, and makes no permutations (`nShuffle` is ignored): the
+#'   units are the regions of the reduced background plus every query region that overlaps
+#'   none of them; for each target set the units hit by both sets, by one or by neither form
+#'   a 2x2 table, and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit
+#'   width gives the p-value (with `strata = 1`, Fisher's exact test). Stratifying by width
+#'   matters: wide units are hit by both sets more often by chance, which makes an
+#'   unstratified region-level test (as LOLA's) anti-conservative on universes of unequal
+#'   region sizes. It is much faster than the permutation test
+#' @param strata number of bins of unit width (quantiles of log width) for the region-level
+#'   test and the `odds_ratio` column; default 50 (units of identical width share a bin, so
+#'   there can be fewer)
 #' @return a `peakOverlapResult`, which is a data.frame with one row per target peak set:
 #'   `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
 #'   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
@@ -188,9 +200,12 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
 #'   shared by most of them; rank by `jaccard` instead (on those 20 ENCODE peak sets it put
 #'   the profiled factor first for 11 of 14, `fold_enrichment` for 3-4), and report
-#'   `fold_enrichment` as an effect size. The
+#'   `fold_enrichment` as an effect size. With `background` also `odds_ratio`, the
+#'   Mantel-Haenszel odds ratio of the region-level table described under `method` (`NA`
+#'   without a background). The
 #'   adjusted p-values are corrected across all target sets, for `pool = FALSE` as well. The
-#'   arguments the p-values were computed with are in `attr(, "params")`.
+#'   arguments the p-values were computed with, and the statistic the results should be
+#'   ranked by (`rank_by`), are in `attr(, "params")`.
 #' @export
 #' @examples
 #' require(TxDb.Hsapiens.UCSC.hg38.knownGene)
@@ -203,7 +218,13 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #' @author G Yu
 enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod = "BH", nShuffle = 1000,
                               chainFile = NULL, pool = TRUE, mc.cores = detectCores() - 1, verbose = TRUE,
-                              symmetric = FALSE, background = NULL) {
+                              symmetric = FALSE, background = NULL,
+                              method = c("permutation", "fisher"), strata = 50) {
+    method <- match.arg(method)
+    if (method == "fisher" && is.null(background)) {
+        stop("method = \"fisher\" needs `background`, the universe the test counts regions in ",
+             "(for example open chromatin of the cell type).")
+    }
     TxDb <- loadTxDb(TxDb)
     query.gr <- loadPeak(queryPeak)
     if (is(targetPeak[1], "GRanges") || is(targetPeak[[1]], "GRanges")) {
@@ -240,6 +261,32 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
     }
 
     if (is.null(background) && nShuffle >= 1 && verbose) .note_whole_genome_null()
+
+    ## region-level 2x2 against the background: the odds ratio for every call with a
+    ## background, and the test itself for method = "fisher"
+    ft <- if (!is.null(background)) .overlap_fisher(query.gr, target.gr, background, strata) else NULL
+
+    if (method == "fisher") {
+        es <- .overlap_effect_size(query.gr, target.gr)
+        res <- data.frame(
+            qSample = qSample,
+            tSample = tSample,
+            qLen = length(query.gr),
+            tLen = unlist(lapply(target.gr, length)),
+            N_OL = vapply(target.gr, function(tt) length(intersect(query.gr, tt)), numeric(1)),
+            pvalue = ft$pvalue,
+            p.adjust = p.adjust(ft$pvalue, method = pAdjustMethod),
+            expected = ft$expected,
+            fold_enrichment = ft$a / ft$expected,
+            odds_ratio = ft$odds_ratio,
+            jaccard = es$jaccard,
+            frac_query = es$frac_query,
+            frac_target = es$frac_target
+        )
+        return(.as_peakOverlapResult(res, nShuffle = 0, pool = pool, symmetric = symmetric,
+                                     pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb,
+                                     null = .fisher_null_label(ft), method = method, fisher = ft))
+    }
 
     if (!is.null(background)) {
         bg <- .prepare_background(background)
@@ -311,6 +358,7 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         p.adjust = padj,
         expected = expected,
         fold_enrichment = ol / expected,
+        odds_ratio = if (is.null(ft)) NA_real_ else ft$odds_ratio,
         jaccard = es$jaccard,
         frac_query = es$frac_query,
         frac_target = es$frac_target
@@ -318,7 +366,7 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 
     .as_peakOverlapResult(res, nShuffle = nShuffle, pool = pool, symmetric = symmetric,
                           pAdjustMethod = pAdjustMethod, chainFile = chainFile, TxDb = TxDb,
-                          null = null)
+                          null = null, method = method, fisher = ft)
 }
 
 ## Once per session (rlang's frequency = "once"); the recursive calls of pool = FALSE share it.
@@ -362,14 +410,85 @@ setOldClass(c("peakOverlapResult", "data.frame"))
 ## The result stays a data.frame (existing code keeps working); the class lets methods
 ## recognise it and the attribute records how the p-values were obtained.
 .as_peakOverlapResult <- function(res, nShuffle, pool, symmetric, pAdjustMethod, chainFile, TxDb,
-                                  null = NA_character_) {
+                                  null = NA_character_, method = "permutation", fisher = NULL) {
     genome <- tryCatch(paste(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), collapse = ","),
                        error = function(e) NA_character_)
+    if (is.null(res$odds_ratio)) res$odds_ratio <- NA_real_
     attr(res, "params") <- list(nShuffle = nShuffle, pool = pool, symmetric = symmetric,
                                 pAdjustMethod = pAdjustMethod, liftOver = !is.null(chainFile),
-                                genome = genome, null = null)
+                                genome = genome, null = null, method = method,
+                                strata = if (is.null(fisher)) NA_integer_ else fisher$strata,
+                                universe_units = if (is.null(fisher)) NA_integer_ else fisher$units,
+                                query_outside_universe = if (is.null(fisher)) NA_integer_ else fisher$query_outside,
+                                target_outside_universe = if (is.null(fisher)) NA_integer_ else fisher$target_outside,
+                                rank_by = .default_rank_by(res))
     class(res) <- c("peakOverlapResult", "data.frame")
     res
+}
+
+## The statistic target sets are ranked by (see the documentation of enrichPeakOverlap()).
+.default_rank_by <- function(res) {
+    "jaccard"
+}
+
+.fisher_null_label <- function(ft) {
+    sprintf(paste("region-level test against the background: %d units (%d query regions outside it",
+                  "added as units), Cochran-Mantel-Haenszel over %d width strata"),
+            ft$units, ft$query_outside, ft$strata)
+}
+
+## Region-level 2x2 of every target set against a universe (LOLA's design), stratified by
+## the width of the universe regions. Units are the regions of reduce(background) plus every
+## query region that overlaps none of them, so each query region falls in a unit and the
+## counts are consistent (LOLA's raw mode fails with "Negative b entry" when query regions
+## lie outside the universe). A unit is hit when it overlaps at least one region of the set
+## (strand ignored); a = hit by both, b = target only, c = query only, d = neither. Wide
+## units are hit by both sets more often by chance, so width confounds a plain 2x2: units
+## are grouped into `strata` bins by quantiles of log width and combined with the
+## Mantel-Haenszel odds ratio and the one-sided Cochran-Mantel-Haenszel test (continuity
+## corrected). With strata = 1 the p-value is the exact hypergeometric tail (Fisher's exact
+## test, alternative "greater") and the odds ratio the sample odds ratio.
+.overlap_fisher <- function(query.gr, target.gr, background, strata = 50) {
+    unstrand <- function(gr) { strand(gr) <- "*"; granges(gr) }
+    bg <- if (is(background, "GRanges")) background else loadPeak(background)
+    units <- GenomicRanges::reduce(unstrand(bg))
+    q <- unstrand(query.gr)
+    out_q <- !IRanges::overlapsAny(q, units)
+    if (any(out_q)) {
+        units <- c(units, GenomicRanges::reduce(q[out_q]))
+    }
+    n_units <- length(units)
+    strata <- max(1L, as.integer(strata))
+    lw <- log(as.numeric(width(units)))
+    br <- unique(stats::quantile(lw, probs = seq(0, 1, length.out = strata + 1), names = FALSE))
+    s <- if (length(br) > 2) cut(lw, br, include.lowest = TRUE, labels = FALSE) else rep(1L, n_units)
+    S <- max(s)
+    hq <- IRanges::overlapsAny(units, q)
+    idx <- GenomicRanges::GNCList(units)
+    one <- function(tt) {
+        tt <- unstrand(tt)
+        ht <- IRanges::overlapsAny(units, tt)
+        out_t <- sum(!IRanges::overlapsAny(tt, idx))
+        ## doubles: products of four integer counts overflow on universes of ~10^4 units
+        a <- as.numeric(tabulate(s[hq & ht], S)); b <- as.numeric(tabulate(s[!hq & ht], S))
+        cc <- as.numeric(tabulate(s[hq & !ht], S)); d <- as.numeric(tabulate(s[!hq & !ht], S))
+        n <- a + b + cc + d
+        e <- (a + b) * (a + cc) / n
+        if (S == 1) {
+            p <- stats::phyper(a - 1, a + cc, b + d, a + b, lower.tail = FALSE)
+            return(c(p, (a * d) / (b * cc), a, e, out_t))
+        }
+        k <- n > 1
+        v <- (a + b) * (cc + d) * (a + cc) * (b + d) / (n^2 * (n - 1))
+        sv <- sum(v[k])
+        p <- if (sv > 0) stats::pnorm((sum(a[k]) - sum(e[k]) - 0.5) / sqrt(sv), lower.tail = FALSE) else 1
+        or <- sum((a * d / n)[n > 0]) / sum((b * cc / n)[n > 0])
+        c(p, or, sum(a), sum(e[n > 0]), out_t)
+    }
+    m <- vapply(target.gr, one, numeric(5))
+    list(pvalue = unname(m[1, ]), odds_ratio = unname(m[2, ]), a = unname(m[3, ]),
+         expected = unname(m[4, ]), strata = S, units = n_units, query_outside = sum(out_q),
+         target_outside = sum(m[5, ]))
 }
 
 
@@ -489,7 +608,12 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
     bg <- GenomicRanges::reduce(bg, ignore.strand = TRUE)
     if (!length(bg)) stop("`background` contains no regions.")
     chr <- as.character(seqnames(bg))
-    list(chr = chr, start = start(bg), width = width(bg), by_chr = split(seq_along(chr), chr))
+    by_chr <- split(seq_along(chr), chr)
+    w <- as.numeric(width(bg))
+    ## cumulative widths per chromosome (and over the whole background), so that a position
+    ## is drawn by base pair with findInterval() instead of a weighted sample() per call
+    list(chr = chr, start = start(bg), width = width(bg), by_chr = by_chr,
+         cum = lapply(by_chr, function(k) cumsum(w[k])), cum_all = cumsum(w))
 }
 
 ## Move every peak to a random position in the background, chosen by base pair: a
@@ -505,8 +629,10 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
     for (cc in unique(chr)) {
         i <- which(chr == cc)
         k <- bg$by_chr[[cc]]
-        if (is.null(k)) k <- seq_along(bg$chr)
-        j <- k[sample.int(length(k), length(i), replace = TRUE, prob = bg$width[k])]
+        cw <- bg$cum[[cc]]
+        if (is.null(k)) { k <- seq_along(bg$chr); cw <- bg$cum_all }
+        ## a background region with probability proportional to its width
+        j <- k[findInterval(stats::runif(length(i)) * cw[length(cw)], cw) + 1L]
         room <- pmax(bg$width[j] - w[i] + 1L, 1L)
         out_start[i] <- bg$start[j] + as.integer(floor(stats::runif(length(i)) * room))
         out_chr[i] <- bg$chr[j]
@@ -524,17 +650,36 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
         message(">> permutation test of peak overlap within the background",
                 if (shuffle_query) " (mirrored)", "...\t", format(Sys.time(), "%Y-%m-%d %X"))
     }
-    obs <- vapply(target.gr, function(tt) length(intersect(query.gr, tt)), numeric(1))
+    ## All target sets are handled together in each permutation: they are concatenated
+    ## once, shuffled in one call, reduced per set and counted against the reduced query
+    ## with one overlap search. The count is the number of overlapping pairs of reduced
+    ## query and reduced target regions, which equals length(intersect(query, target)):
+    ## reduced regions are never adjacent, so no two pieces of the intersection merge.
+    ## Strand is ignored throughout.
+    unstrand <- function(gr) { strand(gr) <- "*"; granges(gr) }
+    n_t <- length(target.gr)
+    grp <- rep(seq_len(n_t), lengths(target.gr))
+    t_all <- unstrand(do.call(c, unname(lapply(target.gr, granges))))
+    q_red <- GenomicRanges::reduce(unstrand(query.gr))
+    q_idx <- GenomicRanges::GNCList(q_red)
+    count_t <- function(t_gr) {
+        tl <- GenomicRanges::reduce(split(t_gr, factor(grp, levels = seq_len(n_t))))
+        h <- IRanges::countOverlaps(unlist(tl, use.names = FALSE), q_idx)
+        vapply(split(h, factor(rep(seq_len(n_t), lengths(tl)), levels = seq_len(n_t))), sum, numeric(1))
+    }
+    t_red <- GenomicRanges::reduce(split(t_all, factor(grp, levels = seq_len(n_t))))
+    t_red_all <- unlist(t_red, use.names = FALSE)
+    t_red_grp <- factor(rep(seq_len(n_t), lengths(t_red)), levels = seq_len(n_t))
+    obs <- unname(count_t(t_all))
     if (nShuffle < 1) {
-        return(list(pvalue = NULL, overlap = unname(obs), expected = NULL))
+        return(list(pvalue = NULL, overlap = obs, expected = NULL))
     }
     one <- function(j) {
         if (shuffle_query) {
-            qs <- .shuffle_in_background(query.gr, bg)
-            vapply(target.gr, function(tt) length(intersect(qs, tt)), numeric(1))
+            qs <- GenomicRanges::reduce(.shuffle_in_background(query.gr, bg))
+            vapply(split(IRanges::countOverlaps(t_red_all, qs), t_red_grp), sum, numeric(1))
         } else {
-            vapply(target.gr, function(tt) length(intersect(query.gr, .shuffle_in_background(tt, bg))),
-                   numeric(1))
+            count_t(.shuffle_in_background(t_all, bg))
         }
     }
     rr <- if (Sys.info()[1] == "Windows" || mc.cores <= 1) {

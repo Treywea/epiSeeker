@@ -1,5 +1,17 @@
 # epiSeeker 1.1.4
 
++ `enrichPeakOverlap(method = "fisher")` tests every target set against the `background` as a
+  universe, without permutations: the units are the reduced background regions plus every query
+  region outside them (so the table stays consistent, where LOLA's raw mode fails with "Negative b
+  entry"), and the one-sided Cochran-Mantel-Haenszel test over `strata` bins of unit width (default
+  50) gives the p-value. Stratifying by width keeps the test calibrated on universes of unequal
+  region sizes, on which an unstratified region-level test is anti-conservative. With a background
+  the result also has `odds_ratio`, the Mantel-Haenszel odds ratio of that table, and
+  `attr(, "params")$rank_by` names the statistic to rank by, which the `interpret()` digest uses.
+  The permutation test with `background` is faster: positions are drawn from precomputed cumulative
+  widths and all target sets are shuffled and counted in one pass per permutation (same statistic,
+  strand ignored). The default (`method = "permutation"`, `background = NULL`) is unchanged.
+  [NUMBERS] (2026-11-08, Sun)
 + `enrichPeakOverlap()` without `background` says, once per session, that the p-values of a
   whole-genome null are anti-conservative for peaks concentrated in open chromatin (on 20
   ENCODE TF ChIP-seq peak sets against 60 reference sets, 1181 of the 1200 pairs were

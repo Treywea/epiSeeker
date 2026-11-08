@@ -284,3 +284,108 @@ test_that("without a background a note says once per session that the whole-geno
     old <- options(epiSeeker.null_note = FALSE); on.exit(options(old), add = TRUE)
     expect_no_message(run(verbose = TRUE), message = "anti-conservative")
 })
+
+## ---- region-level test against a universe (method = "fisher") and the odds ratio ----------
+
+## background of unequal widths on chr1, and peaks placed uniformly by base pair within it
+fisher_bg <- function(n = 2000) {
+    w <- round(exp(stats::runif(n, log(200), log(20000))))
+    st <- cumsum(c(1e5, head(w, -1) + 5000))
+    GRanges("chr1", IRanges(st, width = w))
+}
+in_bg <- function(n, bg, w = 300) {
+    j <- sample(length(bg), n, replace = TRUE, prob = width(bg))
+    room <- pmax(width(bg)[j] - w + 1L, 1L)
+    GRanges("chr1", IRanges(start(bg)[j] + floor(stats::runif(n) * room), width = w))
+}
+
+test_that("the region-level test is calibrated on a universe of unequal region sizes", {
+    set.seed(20261108)
+    bg <- fisher_bg()
+    p10 <- p1 <- numeric(200)
+    for (r in seq_along(p10)) {
+        q <- in_bg(400, bg); t <- in_bg(400, bg)
+        p10[r] <- epiSeeker:::.overlap_fisher(q, list(t), bg, strata = 10)$pvalue
+        p1[r] <- epiSeeker:::.overlap_fisher(q, list(t), bg, strata = 1)$pvalue
+    }
+    expect_gte(mean(p10 < 0.05), 0.01)
+    expect_lte(mean(p10 < 0.05), 0.09)
+    ## without strata, width confounds the table: wide units are hit by both sets
+    expect_gt(mean(p1 < 0.05), mean(p10 < 0.05))
+})
+
+test_that("strata = 1 is Fisher's exact test on the region-level table", {
+    set.seed(3)
+    bg <- fisher_bg(300)
+    q <- in_bg(80, bg); t <- c(q[1:20], in_bg(60, bg))
+    ft <- epiSeeker:::.overlap_fisher(q, list(t), bg, strata = 1)
+    u <- reduce(bg)
+    hq <- overlapsAny(u, q); ht <- overlapsAny(u, t)
+    tab <- table(factor(hq, c(TRUE, FALSE)), factor(ht, c(TRUE, FALSE)))
+    expect_equal(ft$pvalue, fisher.test(tab, alternative = "greater")$p.value, tolerance = 1e-10)
+    expect_equal(ft$odds_ratio, (tab[1, 1] * tab[2, 2]) / (tab[1, 2] * tab[2, 1]))
+    expect_equal(ft$a, tab[1, 1])
+})
+
+test_that("the region-level test works on a universe of tens of thousands of units", {
+    ## the CMH variance multiplies four counts per stratum; as integers they overflowed to NA
+    set.seed(11)
+    bg <- GRanges("chr1", IRanges(seq(1, by = 3000, length.out = 60000), width = sample(200:2000, 60000, replace = TRUE)))
+    q <- bg[sample(length(bg), 3000)]; t <- bg[sample(length(bg), 3000)]
+    for (st in c(1, 2, 10)) {
+        ft <- epiSeeker:::.overlap_fisher(q, list(t), bg, strata = st)
+        expect_false(is.na(ft$pvalue))
+        expect_false(is.na(ft$odds_ratio))
+    }
+})
+
+test_that("query regions outside the universe become units, so the table stays consistent", {
+    bg <- GRanges("chr1", IRanges(c(1e5, 2e5, 3e5), width = 1000))
+    q <- GRanges("chr1", IRanges(c(1e5 + 10, 5e5, 6e5), width = 100))     # two outside
+    t <- GRanges("chr1", IRanges(c(5e5 + 20, 9e5), width = 100))           # one outside
+    ft <- epiSeeker:::.overlap_fisher(q, list(t), bg, strata = 1)
+    expect_equal(ft$units, 5)
+    expect_equal(ft$query_outside, 2)
+    expect_equal(ft$target_outside, 1)
+    expect_equal(ft$a, 1)          # the added unit at 5e5 is hit by both
+    expect_false(is.na(ft$pvalue))
+})
+
+test_that("the fast background permutation counts what intersect() counts", {
+    set.seed(5)
+    q <- GRanges("chr1", IRanges(sample(1e6, 300), width = sample(100:2000, 300, replace = TRUE)))
+    tl <- lapply(1:4, function(i) GRanges("chr1", IRanges(sample(1e6, 200), width = sample(50:3000, 200, replace = TRUE))))
+    ## adjacent and overlapping regions within a set
+    tl[[1]] <- c(tl[[1]], GRanges("chr1", IRanges(c(1000, 1100), c(1099, 1200))))
+    bgi <- epiSeeker:::.prepare_background(GRanges("chr1", IRanges(1, 2e6)))
+    obs <- epiSeeker:::.overlap_perm_background(q, tl, bgi, nShuffle = 0, verbose = FALSE)$overlap
+    expect_equal(obs, vapply(tl, function(tt) length(intersect(q, tt)), numeric(1)), ignore_attr = TRUE)
+})
+
+test_that("method = \"fisher\" needs a background and reports the odds ratio and its test", {
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+    set.seed(7)
+    bg <- fisher_bg(500)
+    q <- in_bg(100, bg)
+    tl <- list(related = c(q[1:40], in_bg(60, bg)), unrelated = in_bg(100, bg))
+    expect_error(enrichPeakOverlap(q, tl, TxDb = txdb, method = "fisher", verbose = FALSE), "needs `background`")
+    res <- enrichPeakOverlap(q, tl, TxDb = txdb, method = "fisher", background = bg, verbose = FALSE)
+    expect_equal(res$tSample, c("related", "unrelated"))
+    expect_lt(res$pvalue[1], 1e-6)
+    expect_gt(res$odds_ratio[1], res$odds_ratio[2])
+    prm <- attr(res, "params")
+    expect_equal(prm$method, "fisher")
+    expect_match(prm$null, "Cochran-Mantel-Haenszel")
+    ## the permutation path with a background reports the same odds ratio; without one, NA
+    res2 <- enrichPeakOverlap(q, tl, TxDb = txdb, nShuffle = 10, mc.cores = 1, background = bg, verbose = FALSE)
+    expect_equal(res2$odds_ratio, res$odds_ratio)
+    res3 <- enrichPeakOverlap(q, tl, TxDb = txdb, nShuffle = 0, mc.cores = 1, verbose = FALSE)
+    expect_true(all(is.na(res3$odds_ratio)))
+    ## the interpret() digest ranks by the recorded statistic and says so
+    txt <- epiSeeker:::.digest_overlap(res, 30)$text
+    expect_match(txt, paste0("ranked by ", prm$rank_by), fixed = TRUE)
+    expect_match(txt, "odds_ratio=", fixed = TRUE)
+    expect_match(txt, "no permutations", fixed = TRUE)
+    attr(res, "params")$rank_by <- "odds_ratio"
+    expect_match(epiSeeker:::.digest_overlap(res, 30)$text, "ranked by odds_ratio (jaccard", fixed = TRUE)
+})
