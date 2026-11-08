@@ -75,3 +75,36 @@ test_that("objects made by the adapters and the bulk functions are all interpret
     class(ov) <- c("peakOverlapResult", "data.frame")
     expect_error(clusterProfiler::interpret(ov), "overlap = ")
 })
+
+test_that("an overlap table from method = \"fisher\" reaches the csAnno digest with its odds ratio and ranking", {
+    skip_if_not_installed("aisdk")
+    skip_if_not_installed("TxDb.Hsapiens.UCSC.hg38.knownGene")
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
+    env <- new.env(); env$calls <- list(); mock_any(env)
+    set.seed(11)
+    bg <- GenomicRanges::GRanges("chr1", IRanges::IRanges(seq(1e5, by = 2e4, length.out = 300), width = 5000))
+    pick <- function(n) {
+        j <- sample(length(bg), n, replace = TRUE)
+        GenomicRanges::GRanges("chr1", IRanges::IRanges(GenomicRanges::start(bg)[j] + sample(0:4000, n, TRUE),
+                                                        width = 300))
+    }
+    q <- pick(100)
+    tl <- list(related = c(q[1:40], pick(60)), unrelated = pick(100))
+    res <- enrichPeakOverlap(q, tl, TxDb = txdb, method = "fisher", background = bg, verbose = FALSE)
+    expect_s3_class(res, "peakOverlapResult")
+    expect_true("odds_ratio" %in% names(res))
+    rank_by <- attr(res, "params")$rank_by
+    expect_true(rank_by %in% names(res))
+
+    data(peakAnno, package = "epiSeeker")
+    r <- clusterProfiler::interpret(peakAnno, overlap = res, model = "openai:m")
+    expect_equal(clusterProfiler::provenance(r)$entry_point, "interpret,csAnno")
+    sec <- attr(r, "evidence")$sections$overlap
+    expect_match(sec, paste0("ranked by ", rank_by), fixed = TRUE)
+    expect_match(sec, "odds_ratio=", fixed = TRUE)
+    expect_match(sec, "no permutations", fixed = TRUE)
+    expect_match(sec, "related", fixed = TRUE)
+    ## the model is asked once, with the digest that names the overlap
+    expect_length(env$calls, 1)
+    expect_match(env$calls[[1]]$prompt, "odds_ratio=", fixed = TRUE)
+})
