@@ -14,6 +14,10 @@ assay "H3K27me3 (broad histone mark)", merge gap 5,000 bp.
 (NOTE). Median peak width 354 bp - inside the range of TF peaks (NOTE: the ENCODE histone pipeline
 calls peaks in narrow mode, so the domains are built by merging).
 
+**Assay label** (`seqAssayQC()` on the peaks, before merging; `tables/assay_qc.tsv`): not contradicted for
+H3K27me3 (NOTE; 25.0% of peaks within 1 kb of a TSS, median width 354 bp, 38.2% in gene bodies). The
+same peaks declared as TF are not flagged either (planted check P26): no flag does not verify the mark.
+
 **Domains** (`tables/domains_summary.tsv`): 2,385 peaks -> 1,275 domains within 5 kb; width
 median 363 bp (IQR 234-1,802, max 41,562), 50 domains of >= 10 kb, 2.47 Mb covered. Many domains
 are single peaks: the summary depends on the gap, which is why the report states it.

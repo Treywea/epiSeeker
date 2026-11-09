@@ -14,6 +14,10 @@ a 40-150 bp and a 180-250 bp mode; `provenance/example_fragments.tsv.gz`).
 **Input checks.** Genome = TxDb (PASS); seqlevels of peaks and fragments UCSC (PASS); median peak
 width 180 bp (PASS).
 
+**Assay label** (`seqAssayQC()`, `tables/assay_qc.tsv`, declared "DNase-seq"): not contradicted for DNase
+(NOTE; 37.3% within 1 kb of a TSS, median width 180 bp, 38.8% in gene bodies). Declared as H3K9me3 the
+same peaks are flagged (promoter fraction above the 1.5-9.9% of ENCODE H3K9me3 sets; planted check P25).
+
 **Accessibility** (`tables/annotation_stat.tsv`): 47.8% of peaks within 3 kb of a TSS (37.3%
 within 1 kb), 32.6% intronic, 13.3% distal intergenic; median |distance to TSS| 4,478 bp.
 `annoChecks()`: 0 peaks beyond chromosome ends, 0 dropped. Figures: `annotation_bar.pdf`,

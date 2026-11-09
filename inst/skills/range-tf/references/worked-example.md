@@ -18,6 +18,13 @@ factor).
 (NOTE: the out-of-bound check is what protects against another build). Seqlevels UCSC (PASS).
 Median peak width 333.5 / 86 / 147 bp, inside or below the 184-556 bp of 20 ENCODE TF sets (PASS).
 
+**Assay label** (`seqAssayQC()`, `tables/assay_qc.tsv`, declared "TF"): ARmo_1nM and ARmo_100nM not
+contradicted (NOTE; ARmo_1nM: 8.9% of peaks within 1 kb of a TSS, median width 334 bp, 59.0% in gene
+bodies); **ARmo_0M flagged** (WARN): median width 86 bp, below the 146-1,302 bp of ENCODE TF peak sets.
+The label is probably right (a GEO peak call with very narrow peaks), so this is one of the false flags
+the check makes (3.6% on held-out ENCODE files): report it, look at the peak caller, do not drop the set
+silently. The NOTEs do not verify "TF": the check flags no broad mark declared as TF.
+
 **Annotation** (`tables/annotation_stat.tsv`): ARmo_1nM 2288 peaks, 17.8% within 3 kb of a TSS
 (8.9% within 1 kb), 34.2% other introns, 23.3% distal intergenic; ARmo_0M 800 peaks, 16.2%;
 ARmo_100nM 1351 peaks, 17.8%. `annoChecks()`: 0 peaks beyond chromosome ends and 0 dropped for all

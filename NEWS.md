@@ -74,6 +74,11 @@
   prostate H3K27me3, chr1-2 only; source and licence in `SOURCE.txt`), so the overlap test of the
   `range-tf` example now has a background of open chromatin instead of the union of the tested
   sets (2026-11-09).
+  - `base-singlemolecule` adjusts co-occurrence with `modCooccurrence(adjust = "read")` (its own
+    per-read covariate) and asks for distance-matched control pairs next to it.
+  - `range-tf`, `range-histone` and `range-atac` run `seqAssayQC()` as an input check: a flag is a
+    WARN with its reasons; no flag is a NOTE saying the check is partial (59% of narrow/broad swaps
+    flagged on held-out ENCODE files, none of the broad marks declared as TF), never a PASS.
 + `interpret()` for a `loopAnno`: the evidence digest ends with a fixed caveat that loop partners
   are candidate genes - in the package's CRISPRi benchmark evaluation real loops were no more
   precise than distance-matched rewired loops (precision 0.220 vs 0.219) (2026-11-09).
