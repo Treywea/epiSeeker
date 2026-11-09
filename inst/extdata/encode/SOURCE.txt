@@ -1,0 +1,24 @@
+Small ENCODE region sets used by the examples of the agent skills (inst/skills/).
+Both are subsets (chr1 and chr2 only, first three columns, sorted, duplicates removed) of
+released ENCODE files on GRCh38; data-raw/encode_example_regions.R makes them.
+
+LNCaP_R1881_DNase_ENCFF570MWX_chr1-2.bed.gz  (19,077 regions)
+  DNase-seq peaks of LNCaP clone FGC treated with 1 nM R1881 (17beta-hydroxy-17-methylestra-
+  4,9,11-trien-3-one) for 12 h. ENCODE experiment ENCSR000EKU (Gregory Crawford lab, Duke),
+  file ENCFF570MWX (bed narrowPeak, "peaks", ENCODE4 pipeline v3.0.0, GRCh38),
+  md5 of the downloaded file 11fc2eb70efc494a00217350f0e83035.
+  Used as the background (universe) of the overlap test in the range-tf example, whose AR
+  ChIP-seq peaks come from LNCaP-ARmo cells at 1 nM DHT (GSE48308), and as the range-atac example.
+
+prostate_H3K27me3_ENCFF198QRW_chr1-2.bed.gz  (2,385 regions)
+  H3K27me3 ChIP-seq "replicated peaks" of adult prostate gland tissue (male, 37 years).
+  ENCODE experiment ENCSR690CSD (Bradley Bernstein lab, Broad), file ENCFF198QRW
+  (bed narrowPeak, ENCODE4 histone pipeline v1.5.1, GRCh38),
+  md5 of the downloaded file db7ed4b10bdf4f8eb4a7e37d14e50ea0.
+  Used as the range-histone example.
+
+Licence and citation. ENCODE data use policy (https://www.encodeproject.org/help/citing-encode/,
+read 2026-11-09): "External data users may freely download, analyze and publish results based on
+any ENCODE data without restrictions." Please cite the ENCODE Project Consortium (Nature 2012,
+489:57-74; Nature 2020, 583:699-710), the portal (Luo et al., Nucleic Acids Res 2020, 48:D882-D889)
+and the experiment accessions above.

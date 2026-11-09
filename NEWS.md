@@ -62,6 +62,21 @@
   correctness checks (`annoChecks()` etc.), `interpret()` last, provenance. The scripts stop on a
   failed check, record every warning, and call a model only when one is given. A test checks the
   format and that every function the skills name exists (2026-11-09).
++ Second batch of agent skills: `range-histone` (broad marks merged into domains, genes under
+  domains, wide and gene-body profiles), `range-atac` (accessibility; TSS enrichment, FRiP and
+  fragment lengths from fragments), `range-spatial` (spatial domains, stopped when sequencing
+  depth explains them; chip rows / columns and stripes flagged), `base-singlemolecule` (per-read
+  tables; co-occurrence of elements adjusted for per-read openness, which otherwise inflates it)
+  and `report` (collects the runs of other skills, their checks and provenance, with an md5 check
+  of their outputs). Steps shared by several skills moved to `shared/range-steps.R` and
+  `shared/group-steps.R`; spatial input moved from `range-singlecell` to `range-spatial`. The
+  examples use two small ENCODE region sets (`extdata/encode/`: LNCaP DNase-seq after R1881, and
+  prostate H3K27me3, chr1-2 only; source and licence in `SOURCE.txt`), so the overlap test of the
+  `range-tf` example now has a background of open chromatin instead of the union of the tested
+  sets (2026-11-09).
++ `interpret()` for a `loopAnno`: the evidence digest ends with a fixed caveat that loop partners
+  are candidate genes - in the package's CRISPRi benchmark evaluation real loops were no more
+  precise than distance-matched rewired loops (precision 0.220 vs 0.219) (2026-11-09).
 
 + `enrichPeakOverlap(method = "fisher")` tests every target set against the `background` as a
   universe, without permutations: the units are the background regions (overlapping ones merged,

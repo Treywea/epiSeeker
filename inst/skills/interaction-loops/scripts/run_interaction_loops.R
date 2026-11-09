@@ -10,7 +10,8 @@
 
 source(system.file("skills", "shared", "skill-helpers.R", package = "epiSeeker"))
 
-## what the paper's Fig 4 found; sent with the context and written into the report
+## what the paper's Fig 4 found; written into the report (interpret(loopAnno) carries the same
+## fact in its digest, so it is not added to the context)
 caveat <- paste(
     "Loop partners are candidate genes, not established targets: on a CRISPRi enhancer-gene",
     "benchmark (K562), genes linked to elements by real loops were regulated no more often than",
@@ -127,8 +128,7 @@ sec <- list(
 )
 
 ## ---- 4. interpret() last -----------------------------------------------------------------
-ctx <- paste(c(if (!is.null(a$context)) sub("([^.])$", "\\1.", a$context), caveat), collapse = " ")
-res <- skill_interpret(la, model = a$model, context = ctx, question = a$question, links = links)
+res <- skill_interpret(la, model = a$model, context = a$context, question = a$question, links = links)
 skill_flag_phrases(res, c(
     "loop partner called the target" = "\\btarget genes?\\b|\\bis the target\\b|\\btargets\\b",
     "regulation from a loop" = "\\b(regulates|controls|drives|activates|represses)\\b",

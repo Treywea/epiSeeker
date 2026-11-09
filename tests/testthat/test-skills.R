@@ -14,9 +14,14 @@ frontmatter <- function(path) {
     stats::setNames(lapply(kv, `[`, 3), vapply(kv, `[`, "", 2))
 }
 
-test_that("the four skills are installed with SKILL.md, a script and a worked example", {
-    expect_true(all(c("range-tf", "base-methylation", "interaction-loops", "range-singlecell") %in% skill_names))
-    expect_true(file.exists(file.path(skills_dir, "shared", "skill-helpers.R")))
+test_that("the nine skills are installed with SKILL.md, a script and a worked example", {
+    expect_true(all(c("range-tf", "range-histone", "range-atac", "range-singlecell", "range-spatial",
+                      "base-methylation", "base-singlemolecule", "interaction-loops", "report") %in% skill_names))
+    expect_true(all(file.exists(file.path(skills_dir, "shared", c("skill-helpers.R", "range-steps.R", "group-steps.R")))))
+    ## the ENCODE region sets of the examples, with their source and licence
+    enc <- system.file("extdata", "encode", package = "epiSeeker")
+    expect_true(all(file.exists(file.path(enc, c("SOURCE.txt", "LNCaP_R1881_DNase_ENCFF570MWX_chr1-2.bed.gz",
+                                                 "prostate_H3K27me3_ENCFF198QRW_chr1-2.bed.gz")))))
     for (s in skill_names) {
         expect_true(file.exists(file.path(skills_dir, s, "SKILL.md")), info = s)
         expect_gte(length(list.files(file.path(skills_dir, s, "scripts"), pattern = "\\.R$")), 1)
@@ -70,9 +75,9 @@ assigned <- function(tk) tk$text[tk$token == "SYMBOL" & c(tk$token[-1], "") == "
                                  c(tk$token[-(1:2)], "", "") == "FUNCTION"]
 
 test_that("functions called by the skill scripts exist", {
-    helpers <- file.path(skills_dir, "shared", "skill-helpers.R")
-    own <- assigned(tokens(helpers))
-    expect_true(all(c("skill_check", "skill_interpret", "skill_finish") %in% own))
+    helpers <- list.files(file.path(skills_dir, "shared"), pattern = "\\.R$", full.names = TRUE)
+    own <- unlist(lapply(helpers, function(f) assigned(tokens(f))))
+    expect_true(all(c("skill_check", "skill_interpret", "skill_finish", "range_inputs", "group_inputs") %in% own))
     for (f in c(helpers, list.files(file.path(skills_dir, skill_names, "scripts"), full.names = TRUE))) {
         tk <- tokens(f)
         defined <- c(own, assigned(tk))

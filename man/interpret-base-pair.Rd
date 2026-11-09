@@ -90,7 +90,9 @@ and is hashed into the execution record ([clusterProfiler::provenance()]). Both 
   coverage, and the genomic distribution of the clusters.
 * `loopAnno`: the genes at promoter anchors ranked by the number of loops on them, the
   peak links of [linkPeaksToGenes()] when `links` is given, the loop classes, the anchor
-  distribution and the span of each class.
+  distribution and the span of each class, and a fixed caveat: loop partners are candidate
+  genes (in the package's CRISPRi benchmark evaluation real loops were no more precise than
+  distance-matched rewired loops, 0.220 vs 0.219).
 }
 \examples{
 data(demo_bmdata)
