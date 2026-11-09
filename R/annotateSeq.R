@@ -21,6 +21,9 @@
 #' @param overlap one of 'TSS' or 'all', if overlap="all", then gene overlap with peak will be reported as nearest gene, no matter the overlap is at TSS region or not.
 #' @param verbose print message or not
 #' @param columns names of columns to be obtained from database
+#' @param assay optional declared assay of the peaks, e.g. "H3K4me3", "TF", "ATAC". When given,
+#'   [seqAssayQC()] compares the annotated peaks with ENCODE peak sets of that assay, warns
+#'   when they do not look like it, and keeps the result in `annoChecks(<result>)$assay`.
 #' @return data.frame or GRanges object with columns of:
 #'
 #' all columns provided by input.
@@ -84,7 +87,8 @@ annotateSeq <- function(peak,
                         ignoreDownstream = FALSE,
                         overlap = "TSS",
                         verbose = TRUE,
-                        columns = c("ENTREZID", "ENSEMBL", "SYMBOL", "GENENAME")) {
+                        columns = c("ENTREZID", "ENSEMBL", "SYMBOL", "GENENAME"),
+                        assay = NULL) {
     is_GRanges_of_TxDb <- FALSE
     if (is(TxDb, "GRanges")) {
         is_GRanges_of_TxDb <- TRUE
@@ -442,6 +446,16 @@ annotateSeq <- function(peak,
             hasGenomicAnnotation = FALSE,
             peakNum = peakNum
         )
+    }
+
+    ## the declared assay against ENCODE peak sets of that assay (R/seqAssayQC.R)
+    if (!is.null(assay)) {
+        qc <- seqAssayQC(res, assay)
+        S4Vectors::metadata(res@anno)$annoChecks$assay <- qc
+        if (isFALSE(qc$consistent)) {
+            warning("The peaks do not look like ", qc$assay, ": ", paste(qc$reasons, collapse = "; "),
+                    ". Check the assay label of this file. Details: annoChecks()$assay.", call. = FALSE)
+        }
     }
 
     return(res)

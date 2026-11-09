@@ -137,11 +137,25 @@ setMethod("interpret", "peakOverlapResult", function(x, ...) {
         obj <- lapply(schema$properties, .na_of)
     }
     res <- structure(obj[fields], names = fields, class = c("seq_interpretation", "list"))
+    ## a set that seqAssayQC() flagged cannot be called consistent with its assay: the rule
+    ## decides, not the model (PLAN D4)
+    qc <- ev$assay_qc
+    overridden <- FALSE
+    if (isFALSE(qc$consistent) && "assay_consistency" %in% fields &&
+        identical(as.character(res$assay_consistency$verdict), "Consistent")) {
+        res$assay_consistency$verdict <- "Inconsistent"
+        res$assay_consistency$reason <- paste0("[set by seqAssayQC(), the model said Consistent] ",
+                                               paste(qc$reasons, collapse = "; "))
+        overridden <- TRUE
+    }
     attr(res, "evidence") <- ev
     attr(res, "provenance") <- .prov_finalize(
         prov, entry_point = entry_point,
         evidence_sha256 = .sha256(ev$sha256),
-        extra = list(evidence_sections_sha256 = ev$sha256, totals = ev$totals)
+        extra = c(list(evidence_sections_sha256 = ev$sha256, totals = ev$totals),
+                  if (!is.null(qc)) list(assay_qc = list(assay = qc$assay, class = qc$class,
+                                                         consistent = qc$consistent, reasons = qc$reasons,
+                                                         fits = qc$fits, verdict_overridden = overridden)))
     )
     res
 }
@@ -190,6 +204,8 @@ setMethod("interpret", "peakOverlapResult", function(x, ...) {
         "  overlap alone as the identity of the factor.",
         "- If the input reports a GENOME BUILD SUSPECT or dropped peaks, say so first and treat",
         "  statements that rest on the annotation (genes, distribution) as unreliable.",
+        "- If the input reports ASSAY QC INCONSISTENT, the regions do not look like the declared",
+        "  assay: never call them consistent with it, and say which features do not fit.",
         "- Say 'Not assessable' when the evidence cannot decide, rather than guessing.",
         sep = "\n"
     )

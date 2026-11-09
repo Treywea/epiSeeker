@@ -10,7 +10,7 @@ annoChecks(x)
 \item{x}{a `csAnno` object}
 }
 \value{
-a list with elements `build` and `dropped`, or `NULL`
+a list with elements `build`, `dropped` and, if checked, `assay`; or `NULL`
 }
 \description{
 `annotateSeq()` checks two silent errors and keeps what it finds with the annotation:
@@ -29,6 +29,8 @@ a list with elements `build` and `dropped`, or `NULL`
     the build check is unreliable for this set (no warning is raised for that alone).
   \item `dropped`: peaks that were not annotated because `TxDb` has no feature on their
     sequence, per sequence and reason (`not in TxDb`, `named differently`, `no feature`).
+  \item `assay` (only when `annotateSeq()` was given `assay`): the result of [seqAssayQC()],
+    whether the peaks look like the declared assay.
 }
 Objects made before these checks existed return `NULL`.
 }
