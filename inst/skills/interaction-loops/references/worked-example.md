@@ -24,10 +24,10 @@ loop without a gene 410, loop includes the nearest gene 110, loop to other genes
 **Correctness.** `annoChecks()` of anchors and peaks: no peak beyond chromosome ends, none dropped;
 peaks and anchors annotated with the same TxDb (PASS); 0 loops between chromosomes.
 
-**interpret()** (last). The script adds the rule of the skill to the context ("Loop partners are
-candidate genes, not established targets ... precision 0.220 vs 0.219 ..."), and the digest lists
-genes at promoter anchors by number of loops (651 genes), the link classes, the genes reached only
-through loops, classes, anchor distribution and spans.
+**interpret()** (last). The digest lists genes at promoter anchors by number of loops (651 genes),
+the link classes, the genes reached only through loops, classes, anchor distribution and spans,
+and ends with its fixed caveat ("Genes at the other end of a loop are candidate genes, not
+established targets ... precision 0.220 vs 0.219 ...").
 
 **What can be said.** "478 of the 2014 peaks outside promoters reach, through a loop, genes other
 than their nearest gene; these loop-linked genes are candidates." **Not:** "TNFSF11 is the target

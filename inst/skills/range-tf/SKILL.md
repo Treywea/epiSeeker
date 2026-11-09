@@ -1,6 +1,6 @@
 ---
 name: range-tf
-description: Annotate, profile, compare and test the overlap of narrow peak sets (TF ChIP-seq, CUT&RUN, CUT&Tag for TFs, ATAC summits) with the epiSeeker R package, catching the silent errors that make such analyses look fine but be wrong (wrong genome build, seqlevels that do not match, a whole-genome null for overlap tests), then interpret the result with interpret() and keep provenance. Use when a user asks what a peak set binds near, which genes or programs it points to, how several peak sets differ, which factor or reference sets it resembles, or to "run epiSeeker/ChIPseeker" on peaks.
+description: Annotate, profile, compare and test the overlap of narrow peak sets (TF ChIP-seq, CUT&RUN, CUT&Tag for TFs) with the epiSeeker R package, catching the silent errors that make such analyses look fine but be wrong (wrong genome build, seqlevels that do not match, a whole-genome null for overlap tests), then interpret the result with interpret() and keep provenance. Use when a user asks what a peak set binds near, which genes or programs it points to, how several peak sets differ, which factor or reference sets it resembles, or to "run epiSeeker/ChIPseeker" on peaks.
 ---
 
 # range-tf: narrow peaks with epiSeeker
@@ -8,8 +8,8 @@ description: Annotate, profile, compare and test the overlap of narrow peak sets
 Every number comes from an epiSeeker function; your job is to call them in the right order, stop
 when a check fires, and report what the functions returned. The script
 `scripts/run_range_tf.R` does all of the steps below; prefer running it over re-typing them.
-Broad histone marks (H3K27me3, H3K36me3, H3K9me3) are not covered: their peaks are kilobases wide and
-"nearest gene" means little for them.
+Broad histone marks (H3K27me3, H3K36me3, H3K9me3) go to `range-histone`, ATAC / DNase peaks to
+`range-atac`; the three share their steps (`../shared/range-steps.R`).
 
 ## 1. Input checks (stop on failure)
 1. **Genome build.** Ask for it (or read it from the pipeline that made the peaks) and pass it as
@@ -36,7 +36,10 @@ Broad histone marks (H3K27me3, H3K36me3, H3K9me3) are not covered: their peaks a
     whole chromosomes and nearly everything is "significant" (false-positive rate 0.996 in the
     package's evaluation; 1181 of 1200 ENCODE pairs significant).
   - A universe made of little more than the sets you test is too small: every unit is hit by
-    something, so p-values sit near 1 (the worked example shows this). Rank, do not test, in that case.
+    something, so p-values sit near 1 (batch 1 of the skills showed this with the union of the
+    bundled sets). Rank, do not test, in that case; the script flags it.
+  - The test is limited to the chromosomes the background covers (a NOTE says how many regions
+    that leaves); regions elsewhere would count as query-only units.
   - **Rank by the effect size** named in `attr(result, "params")$rank_by` (`jaccard`), never by
     p-value: the smallest p-value is shared by most sets. Report `odds_ratio` and `p.adjust` next to it.
   - The test is directional (query in target); `N_OL` is the same both ways.
@@ -78,7 +81,7 @@ checks.tsv; sessionInfo.txt; interpret_provenance.txt; objects.rds).
 ## Run it
 ```sh
 S=$(Rscript -e 'cat(system.file("skills/range-tf/scripts/run_range_tf.R", package = "epiSeeker"))')
-Rscript "$S" --example --out range_tf_example            # bundled AR ChIP-seq peaks, no model
+Rscript "$S" --example --out range_tf_example   # bundled AR ChIP-seq peaks, LNCaP DNase background (chr1-2), no model
 Rscript "$S" --peaks peaks.narrowPeak --genome hg38 --txdb TxDb.Hsapiens.UCSC.hg38.knownGene \
   --annodb org.Hs.eg.db --context "ChIP-seq, HepG2" --targets refs/ --background dnase.bed \
   --out out --model openai:gpt-4o-mini

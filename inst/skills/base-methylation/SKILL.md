@@ -36,7 +36,9 @@ and present it as an epiSeeker result.
   BSgenome =, base = "C", motif = "CG")`, then `plotBmProf()`.
 - Per read (single-molecule data only): `plotModReads(reads, region, types = "5mC")`;
   `modReadMatrix(reads, regions, type =)`; `modCooccurrence(reads, region1, region2, type =)`
-  for whether two regions are modified on the same molecules (needs reads spanning both).
+  for whether two regions are modified on the same molecules (needs reads spanning both). The
+  test is unadjusted: reads modified more everywhere make any two regions look co-modified. For
+  co-occurrence between elements use `base-singlemolecule`, which adjusts for it.
 
 ## 3. Correctness checks
 - `annoChecks()` of the cluster annotation (build, dropped clusters). With fewer than 200 clusters

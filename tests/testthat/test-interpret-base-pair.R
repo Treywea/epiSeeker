@@ -120,7 +120,7 @@ test_that("the loopAnno digest reports gene hubs, classes and spans", {
     la <- lp_anno()
     ev <- epiSeeker:::.loop_digest(la)
     expect_equal(names(ev$sections), c("overview", "gene_hubs", "peak_links", "loop_classes",
-                                       "anchor_distribution", "span"))
+                                       "anchor_distribution", "span", "caveat"))
     expect_true(all(nchar(ev$sha256) == 64))
     expect_match(ev$sections$overview, "Loops: 5 between", fixed = TRUE)
     expect_match(ev$sections$overview, "Loops between chromosomes: 1", fixed = TRUE)
@@ -149,6 +149,24 @@ test_that("the loopAnno digest reports peak links when they are given", {
     expect_match(ev$sections$peak_links, "Genes reached only through loops (1 of 1", fixed = TRUE)
     expect_match(ev$sections$peak_links, "G2\t1\tG1", fixed = TRUE)
     expect_error(epiSeeker:::.loop_digest(la, links = data.frame(x = 1)), "linkPeaksToGenes")
+})
+
+test_that("the loopAnno digest says loop partners are candidates, with the Fig 4 rewiring result", {
+    ev <- epiSeeker:::.loop_digest(lp_anno())
+    cv <- ev$sections$caveat
+    expect_match(cv, "^## Caveat on loop partners")
+    expect_match(cv, "candidate genes, not established targets", fixed = TRUE)
+    expect_match(cv, "precision 0.220 vs 0.219", fixed = TRUE)
+    expect_match(cv, "distance-matched rewired loops", fixed = TRUE)
+    expect_true(endsWith(ev$text, cv))
+    expect_equal(nchar(ev$sha256[["caveat"]]), 64)
+    ## the caveat is there with peak links too, and reaches the model in the prompt (mocked)
+    expect_match(epiSeeker:::.loop_digest(lp_anno(), links = NULL)$text, "0.220 vs 0.219", fixed = TRUE)
+    skip_if_not_installed("aisdk")
+    env <- new.env(); mock_schema_answer(env)
+    res <- clusterProfiler::interpret(lp_anno(), model = "openai:m")
+    expect_match(env$seen$prompt, "precision 0.220 vs 0.219", fixed = TRUE)
+    expect_match(env$seen$prompt, "Genes at the other end of a loop are candidate genes", fixed = TRUE)
 })
 
 test_that("interpret() reads a loopAnno through the shared skeleton", {

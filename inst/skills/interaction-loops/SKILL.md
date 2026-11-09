@@ -51,9 +51,11 @@ never rank candidates as if a loop made one more likely than another gene at the
 ## 4. interpret() last
 `clusterProfiler::interpret(loopAnno, context =, question =, links = <linkPeaksToGenes result>,
 model =)`. The digest lists genes at promoter anchors by number of loops, the peak link classes,
-the genes reached only through loops, loop classes, anchor distribution and spans. The method is
-**experimental** (no comparison with a no-model baseline). The script adds the rule above to
-`context`, and flags (does not edit) any "target", "regulates" or "proves" in the answer.
+the genes reached only through loops, loop classes, anchor distribution and spans, and ends with
+a fixed caveat: loop partners are candidate genes (the Fig 4 rewiring result above, 0.220 vs
+0.219), so the rule reaches the model also when interpret() is called directly. The method is
+**experimental** (no comparison with a no-model baseline). The script flags (does not edit) any
+"target", "regulates" or "proves" in the answer.
 
 ## 5. Provenance and outputs
 `figures/` (loop_classes, loop_span, peak_links), `tables/` (loops_annotated, loop_classes,

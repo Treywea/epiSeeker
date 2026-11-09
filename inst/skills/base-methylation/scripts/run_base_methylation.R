@@ -173,7 +173,8 @@ if (!is.null(a$region)) {
                     if (is.na(co$p_value)) "NOTE" else "PASS",
                     paste0(co$n_reads, " reads span both",
                            if (is.na(co$p_value) && co$n_reads >= 2) "; not testable: a margin of the 2x2 table is empty (e.g. every read modified in one half)"
-                           else if (is.na(co$p_value)) "; not testable: fewer than 2 reads cover both halves" else ""))
+                           else if (is.na(co$p_value)) "; not testable: fewer than 2 reads cover both halves" else
+                               "; unadjusted, so confounded by how modified each read is overall: use base-singlemolecule for the adjusted test"))
     }
 }
 

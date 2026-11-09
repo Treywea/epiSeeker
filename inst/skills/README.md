@@ -6,10 +6,15 @@ correctness checks read before any result is used, and `interpret()` as the last
 
 | skill | data | adapters / classes |
 |---|---|---|
-| `range-tf` | narrow peaks: TF ChIP-seq, CUT&RUN, ATAC summits | `csAnno`, `csAnnoList`, `peakOverlapResult` |
+| `range-tf` | narrow peaks: TF ChIP-seq, CUT&RUN | `csAnno`, `csAnnoList`, `peakOverlapResult` |
+| `range-histone` | broad histone marks, merged into domains | `csAnno`, `seq2gene()`, `getTagMatrix(type = "body")` |
+| `range-atac` | ATAC / DNase peaks, fragments | `csAnno`, `readFragments()`, `getTagMatrix()` |
+| `range-singlecell` | scATAC clusters | `fragmentsToGroups()`, `peaksToGroups()`, `csAnnoList` |
+| `range-spatial` | spatial domains, checked against depth / chip rows / columns | `fragmentsToGroups()`, `readSpotPositions()`, `csAnnoList` |
 | `base-methylation` | single-base levels; per-read 5mC / m6A tables | `bmData`, `readModCalls()` |
+| `base-singlemolecule` | per-read Fiber-seq / modkit tables; co-occurrence adjusted for per-read openness | `readModCalls()`, `modReadMatrix()`, `modCooccurrence()` |
 | `interaction-loops` | chromatin loops (BEDPE) and peaks | `loopAnno`, `linkPeaksToGenes()` |
-| `range-singlecell` | scATAC clusters, spatial domains | `fragmentsToGroups()`, `peaksToGroups()`, `csAnnoList` |
+| `report` | the folders of other skill runs | (collects; no analysis, no model) |
 
 Every skill is a folder in the Agent Skills format: `SKILL.md` (YAML front matter with `name` and
 `description`, then the instructions), `scripts/` (one runnable R script) and
@@ -17,7 +22,11 @@ Every skill is a folder in the Agent Skills format: `SKILL.md` (YAML front matte
 `SKILL.md` follow one structure: input checks (genome build, seqlevels, assay) -> analysis with
 epiSeeker functions -> built-in correctness checks -> `interpret()` last -> provenance, then the
 statements the skill does not allow. `shared/skill-helpers.R` holds the bookkeeping the scripts
-share (arguments, check table, warnings, provenance); it has no analysis in it.
+share (arguments, check table, warnings, provenance); `shared/range-steps.R` (region sets) and
+`shared/group-steps.R` (groups of cells or spots) hold the steps several skills run the same way.
+None of them has analysis of its own. The examples of `range-tf`, `range-histone`, `range-atac`
+and `base-singlemolecule` use two small ENCODE region sets in `extdata/encode/` (source and
+licence in `SOURCE.txt`).
 
 Use them from the installed package:
 ```sh

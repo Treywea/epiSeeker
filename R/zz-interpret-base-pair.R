@@ -18,7 +18,9 @@
 #'   coverage, and the genomic distribution of the clusters.
 #' * `loopAnno`: the genes at promoter anchors ranked by the number of loops on them, the
 #'   peak links of [linkPeaksToGenes()] when `links` is given, the loop classes, the anchor
-#'   distribution and the span of each class.
+#'   distribution and the span of each class, and a fixed caveat: loop partners are candidate
+#'   genes (in the package's CRISPRi benchmark evaluation real loops were no more precise than
+#'   distance-matched rewired loops, 0.220 vs 0.219).
 #'
 #' @param x a `bmData` or a `loopAnno`
 #' @param context,question,model,max_tokens,temperature,reasoning as in [interpret-epiSeeker]
@@ -358,6 +360,8 @@ setMethod("interpret", "loopAnno", function(x, context = NULL, question = NULL, 
         paste0(cl, ": ", length(s), " loops, median ", qq[2], ", IQR ", qq[1], "-", qq[3])
     }, character(1))
     sections$span <- paste0("## Span per class (bp)\n", paste(sp, collapse = "\n"))
+    sections$caveat <- .loop_caveat
+
 
     structure(list(
         text = paste(unlist(sections), collapse = "\n\n"),
@@ -368,6 +372,16 @@ setMethod("interpret", "loopAnno", function(x, context = NULL, question = NULL, 
                       n_genes = nrow(tab), n_genes_sent = k)
     ), class = "seq_digest")
 }
+
+## A fact the digest always carries (checks/20261109_fig4-distmatch in the epiSeeker-LLM
+## records): what a loop partner is worth as evidence of regulation.
+.loop_caveat <- paste0(
+    "## Caveat on loop partners\n",
+    "Genes at the other end of a loop are candidate genes, not established targets. In the ",
+    "package's evaluation on a CRISPRi enhancer-gene benchmark (K562, 9,830 tested pairs), genes ",
+    "linked to elements by real loops were regulated no more often than genes linked by ",
+    "distance-matched rewired loops (precision 0.220 vs 0.219; enrichment 1.00, p = 0.47): loops ",
+    "added recall over the nearest gene, not specificity.")
 
 .loop_links_section <- function(links, n_genes) {
     if (!is.data.frame(links) || is.null(links$link)) {
