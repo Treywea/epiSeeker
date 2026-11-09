@@ -420,5 +420,37 @@ test_that("effect sizes and N_OL from overlap pairs equal those from union() and
     expect_equal(es$frac_query, unname(old[2, ]))
     expect_equal(es$frac_target, unname(old[3, ]))
     expect_equal(unname(epiSeeker:::.n_intersect(q, tl)),
-                 unname(vapply(tl, function(tt) length(suppressWarnings(intersect(q, tt))), numeric(1))))
+                 unname(vapply(tl, function(tt) length(suppressWarnings(intersect(q, tt, ignore.strand = TRUE))), numeric(1))))
+})
+
+test_that("a stranded target set is counted without strand by every method (cases 2025)", {
+    ## the observed overlap kept strand (intersect() pairs "*" only with "*") while the null
+    ## shuffled unstranded sets: a +/- target gave N_OL = 0 and p = 1 with no warning
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+    set.seed(1)
+    st <- sort(sample(1e6:2e8, 2000))
+    target <- GenomicRanges::GRanges("chr1", IRanges::IRanges(st, width = 500),
+                                     strand = sample(c("+", "-"), 2000, TRUE))
+    query <- GenomicRanges::GRanges("chr1", IRanges::IRanges(st[1:500] + 100, width = 200))  # all inside a target
+    unstranded <- target
+    GenomicRanges::strand(unstranded) <- "*"
+    bg <- c(GenomicRanges::GRanges("chr1", IRanges::IRanges(seq(1e6, 2e8, by = 1e5), width = 5e4)),
+            GenomicRanges::granges(unstranded))
+    run <- function(t, ...) enrichPeakOverlap(query, t, TxDb = txdb, mc.cores = 1, verbose = FALSE, ...)
+    for (args in list(list(nShuffle = 20), list(nShuffle = 20, background = bg),
+                      list(method = "fisher", background = bg), list(nShuffle = 10, symmetric = TRUE),
+                      list(nShuffle = 10, pool = FALSE))) {
+        s <- do.call(run, c(list(target), args))
+        u <- do.call(run, c(list(unstranded), args))
+        lab <- paste(names(args), collapse = ",")
+        expect_equal(s$N_OL, 498, info = lab)   # pieces of the intersection: 500 peaks, some close ones merge
+        expect_equal(s$N_OL, u$N_OL, info = lab)
+        expect_gt(s$fold_enrichment, 1)
+        expect_lt(s$pvalue, 0.2)
+        expect_equal(attr(s, "params")$strand, "ignored")
+    }
+    ## a query with strand opposite to the target overlaps it as well
+    q2 <- query
+    GenomicRanges::strand(q2) <- "-"
+    expect_equal(enrichPeakOverlap(q2, target, TxDb = txdb, nShuffle = 0, verbose = FALSE)$N_OL, 498)
 })

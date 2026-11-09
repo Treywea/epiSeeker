@@ -44,15 +44,36 @@
 #' }
 #' Objects made before these checks existed return `NULL`.
 #'
-#' @param x a `csAnno` object
-#' @return a list with elements `build`, `dropped` and, if checked, `assay`; or `NULL`
+#' The build check also runs when the annotation is a `GRanges` (a custom set of regions such
+#' as transposable elements or enhancers, passed as `TxDb`), against `seqlengths()` of that
+#' `GRanges`. A `GRanges` carries chromosome lengths only when they were set (a bed file read
+#' with `readPeakFile()` has none); then the build cannot be checked: `seqlengths_known` is
+#' `FALSE`, `note` says so, a message is shown and `show()` reports it. Set the lengths of
+#' the genome the regions belong to (for example `seqlengths(te) <- seqlengths(txdb)[seqlevels(te)]`)
+#' to have it checked. Also recorded: chromosome lengths recorded on the peaks that differ
+#' from the annotation's (`seqlength_conflicts`) and different genome tags (`genome_conflict`),
+#' both counted as evidence of a mismatch, and the number of peaks on chromosomes without a
+#' known length (`n_peaks_unchecked`).
+#'
+#' `getTagMatrix()` runs the same build check of the peaks against the regions (`windows`,
+#' or the regions made from `TxDb`), which keep the chromosome lengths of the annotation they
+#' were made from (`getBioRegion()`), and keeps it with the matrix: `annoChecks(<tag matrix>)`
+#' returns `build` and, for `type = "body"`, `short_regions` (regions with peaks that are not
+#' in the matrix because they are not longer than the number of bins). For a list of
+#' matrices it returns a list.
+#'
+#' @param x a `csAnno` object, or a tag matrix (or list of them) from `getTagMatrix()`
+#' @return a list with elements `build`, `dropped` and, if checked, `assay` (`csAnno`), or
+#'   `build` and `short_regions` (tag matrix), or `NULL`
 #' @examples
 #' data(peakAnno)
 #' annoChecks(peakAnno)
 #' @export
 annoChecks <- function(x) {
-    if (!is(x, "csAnno")) stop("`x` must be a csAnno object.")
-    S4Vectors::metadata(x@anno)$annoChecks
+    if (is(x, "csAnno")) return(S4Vectors::metadata(x@anno)$annoChecks)
+    if (is.matrix(x)) return(attr(x, "checks"))
+    if (is.list(x) && !is.data.frame(x)) return(lapply(x, annoChecks))
+    stop("`x` must be a csAnno object or a tag matrix from getTagMatrix().")
 }
 
 ## the transcription start sites of the features annotateSeq() uses
@@ -128,17 +149,75 @@ annoChecks <- function(x) {
 }
 
 ## the decision on the build signals
-.build_suspect <- function(b, cutoff = .tss_log2_cutoff) {
+.build_suspect <- function(b, cutoff = .tss_log2_cutoff, ref_label = "TxDb") {
     tss_flat <- !is.na(cutoff) && !is.null(b$tss_ratio) && !is.na(b$tss_ratio) && b$tss_ratio > 0 &&
         abs(log2(b$tss_ratio)) < cutoff
     reasons <- c(
-        if (b$n_out_of_bound > 0) paste0(b$n_out_of_bound, " peak(s) extend beyond the chromosome ends of TxDb (",
+        if (b$n_out_of_bound > 0) paste0(b$n_out_of_bound, " peak(s) extend beyond the chromosome ends of ", ref_label, " (",
                                          paste(utils::head(b$out_of_bound_seqlevels, 3), collapse = ", "), ")"),
+        if (length(b$seqlength_conflicts)) paste0("the chromosome lengths recorded on the peaks and on ", ref_label,
+                                                  " differ (", paste(utils::head(b$seqlength_conflicts, 3), collapse = ", "), ")"),
+        if (isTRUE(b$genome_conflict)) paste0("the peaks are recorded as ", b$genome_peaks, " and ", ref_label,
+                                              " as ", b$genome_TxDb),
         if (tss_flat) sprintf(paste("the peaks are no closer to TSSs than the same peaks shifted by 50-200 kb",
                                     "(%.1f%% vs %.1f%% within 1 kb)"),
                               100 * b$tss_fraction, 100 * b$tss_fraction_shifted)
     )
     list(suspect = length(reasons) > 0, reasons = reasons)
+}
+
+## The genome-build check of annotateSeq(), getTagMatrix() and the like: the signals of
+## .anno_check_build() and the decision, plus what the reference could not tell. `ref` is a
+## TxDb/EnsDb or a GRanges (a custom annotation such as TEs or enhancers, or the windows of
+## getTagMatrix()); `ref_seqinfo` overrides seqinfo(ref) (windows keep the seqinfo of the
+## regions they were made from). A GRanges carries chromosome lengths only when they were
+## set, so the out-of-bound test runs on the peaks of chromosomes with a known length; with
+## none known, the build is not checked and `note` says so. Also recorded: chromosome
+## lengths recorded on the peaks that differ from the reference's (`seqlength_conflicts`)
+## and different genome tags (`genome_conflict`); both count as evidence of a mismatch.
+.build_check <- function(peak.gr, ref, features = NULL, ref_label = "TxDb", ref_seqinfo = NULL) {
+    si <- if (!is.null(ref_seqinfo)) ref_seqinfo else tryCatch(GenomeInfoDb::seqinfo(ref), error = function(e) NULL)
+    b <- .anno_check_build(peak.gr, features, if (is.null(si)) ref else si)
+    gt <- if (is.null(si)) character(0) else unique(stats::na.omit(GenomeInfoDb::genome(si)))
+    if (length(gt)) b$genome_TxDb <- paste(gt, collapse = ",")
+    b$genome_conflict <- !is.na(b$genome_peaks) && !is.na(b$genome_TxDb) &&
+        !length(intersect(strsplit(b$genome_peaks, ",")[[1]], strsplit(b$genome_TxDb, ",")[[1]]))
+    sl_ref <- if (is.null(si)) NULL else GenomeInfoDb::seqlengths(si)
+    chr <- as.character(GenomicRanges::seqnames(peak.gr))
+    known <- !is.null(sl_ref) & !is.na(if (is.null(sl_ref)) NA else sl_ref[chr])
+    sl_peak <- GenomeInfoDb::seqlengths(peak.gr)
+    common <- intersect(names(sl_peak)[!is.na(sl_peak)], names(sl_ref)[!is.na(sl_ref)])
+    b$seqlength_conflicts <- common[sl_peak[common] != sl_ref[common]]
+    b$annotation <- if (is(ref, "GRanges")) "GRanges" else class(ref)[1]
+    b$n_peaks <- sum(known)
+    b$n_peaks_unchecked <- length(chr) - sum(known)
+    b$seqlengths_known <- sum(known) > 0
+    b <- c(b, .build_suspect(b, ref_label = ref_label))
+    b$reliable <- b$n_peaks >= .build_min_peaks
+    b$note <- if (!b$seqlengths_known && length(chr)) {
+        paste0(ref_label, " carries no chromosome lengths for the chromosomes of the peaks, so the genome ",
+               "build could not be checked; set them (e.g. seqlengths(x) <- seqlengths(<BSgenome or TxDb ",
+               "of its build>)[seqlevels(x)]) to check it")
+    } else if (b$n_peaks_unchecked > 0) {
+        paste0(b$n_peaks_unchecked, " peak(s) lie on chromosomes without a length in ", ref_label, " and were not checked")
+    } else NULL
+    b
+}
+
+## warning for a suspect build, message for an unchecked one; returns `b` invisibly
+.report_build <- function(b, ref_label = "TxDb") {
+    if (is.null(b)) return(invisible(b))
+    if (isTRUE(b$suspect)) {
+        warning("The peaks may not be on the genome build of ", ref_label,
+                if (!is.na(b$genome_TxDb)) paste0(" (", b$genome_TxDb, ")"),
+                ": ", paste(b$reasons, collapse = "; "), ". A result against the ",
+                "wrong build looks normal but is wrong; check the genome of the peaks and of ",
+                ref_label, ", or lift one of them over (rtracklayer::liftOver()). ",
+                "Details: annoChecks().", call. = FALSE)
+    } else if (!isTRUE(b$seqlengths_known) && !is.null(b$note)) {
+        message("Note: ", b$note, ".")
+    }
+    invisible(b)
 }
 
 ## Peaks the nearest-feature step dropped, by sequence and reason.

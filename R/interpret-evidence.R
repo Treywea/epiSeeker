@@ -137,6 +137,7 @@
     parts <- c(
         if (isTRUE(b$suspect)) paste0("GENOME BUILD SUSPECT - ", paste(b$reasons, collapse = "; "),
                                       "; annotation-based evidence below may be wrong") else
+        if (isFALSE(b$seqlengths_known)) "genome build NOT CHECKED (the annotation has no chromosome lengths)" else
         if (isFALSE(b$reliable)) paste0("genome build not contradicted, but the check is unreliable with ",
                                         b$n_peaks, " peaks") else
         if (!is.null(b)) "genome build consistent with TxDb",

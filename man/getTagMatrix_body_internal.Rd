@@ -21,3 +21,12 @@ matrix
 \description{
 get tagmatrix internal function
 }
+\details{
+The mean coverage in each of `nbin` bins of every window, with the bins of `bin_vector()`
+(position i of a window of length L is in bin j when b_j <= i < b_(j+1), b = seq(0, L,
+length.out = nbin + 1), the last bin includes L), computed as sums over the bins of the
+run-length encoded coverage. The windows are never expanded to one value per base: that
+took one integer per base pair of all windows (17-19 GB of memory for the genes of a human
+genome with 20\% flanks). Windows not longer than `nbin` cannot be split into `nbin` bins
+and get a row of zeros, as before.
+}

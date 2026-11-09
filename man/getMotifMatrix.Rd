@@ -7,7 +7,7 @@
 getMotifMatrix(region, pwm, ref_obj, by = "name")
 }
 \arguments{
-\item{region}{region object in granges.}
+\item{region}{region object in granges (one or more regions).}
 
 \item{pwm}{PFMatrixList.}
 
@@ -19,7 +19,14 @@ getMotifMatrix(region, pwm, ref_obj, by = "name")
 score matrix
 }
 \description{
-Get the information of motif in a range
+Every region is scanned separately and the hits are placed at the genomic coordinates of
+the region they were found in (column `region`, the index of the region in `region`).
+Regions on the `-` strand are scanned on that strand (the sequence `getSeq()` returns), and
+their hits are mapped back to genomic coordinates, with the strand of the hit flipped.
+`attr(, "range")` is the start and end of the region for one region, and the span of all
+regions when they lie on one chromosome (`NA` otherwise); `attr(, "regions")` keeps the
+regions. Earlier versions recycled the region starts over the rows of the hits, which put
+the hits of several regions at wrong coordinates.
 }
 \examples{
 require(BSgenome.Hsapiens.UCSC.hg38)

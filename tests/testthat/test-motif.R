@@ -59,3 +59,49 @@ test_that("plotMotifProf works with motifMatrix example", {
 
     expect_equal(attr(motif_df, "range"), c(10525891, 10525991))
 })
+
+test_that("getMotifMatrix places the hits of several regions at their own coordinates (cases 2025)", {
+    data(pwm_obj, package = "epiSeeker")
+    two <- GRanges("chr22", IRanges(c(23963111, 10525891), width = c(201, 101)))
+    pwm <- pwm_obj[c(1:50, 120, 170)]
+    key <- function(d) {
+        d <- as.data.frame(d)
+        if (!nrow(d)) return(character(0))
+        sort(paste(d$chr, d$coordinate, d$score, d$strand, d$motif))
+    }
+    one <- lapply(1:2, function(i) getMotifMatrix(two[i], pwm, BSgenome.Hsapiens.UCSC.hg38))
+    expect_gt(nrow(one[[1]]), 0)
+    expect_gt(nrow(one[[2]]), 0)
+    both <- getMotifMatrix(two, pwm, BSgenome.Hsapiens.UCSC.hg38)
+    expect_equal(key(both), sort(c(key(one[[1]]), key(one[[2]]))))
+    for (i in 1:2) {
+        d <- both[both$region == i, ]
+        expect_gt(nrow(d), 0)
+        expect_true(all(d$coordinate >= start(two[i]) & d$coordinate <= end(two[i])))
+    }
+    expect_equal(attr(both, "range"), c(10525891L, 23963311L))
+    expect_equal(attr(one[[1]], "range"), c(23963111L, 23963311L))
+    expect_message(plotMotifProf(both), "2 regions")
+    other <- both
+    other$chr[other$region == 2] <- "chr21"
+    expect_error(plotMotifProf(other), "several chromosomes")
+})
+
+test_that("getMotifMatrix maps the hits of a minus-strand region back to the genome", {
+    data(pwm_obj, package = "epiSeeker")
+    ## motifs scanned on both strands, so that the two orientations of a region hold the same sites
+    pwm <- lapply(universalmotif::convert_motifs(pwm_obj[1:20]), function(m) { m@strand <- "+-"; m })
+    r <- GRanges("chr22", IRanges(23963111, width = 201))
+    rm <- r
+    strand(rm) <- "-"
+    span <- function(d) {
+        d <- as.data.frame(d)
+        a <- stats::aggregate(coordinate ~ seg_id + motif + strand + score, d, range)
+        sort(paste(a$motif, a$coordinate[, 1], a$coordinate[, 2], a$strand, round(abs(a$score), 6)))
+    }
+    p <- getMotifMatrix(r, pwm, BSgenome.Hsapiens.UCSC.hg38)
+    m <- getMotifMatrix(rm, pwm, BSgenome.Hsapiens.UCSC.hg38)
+    expect_gt(nrow(p), 0)
+    expect_equal(span(m), span(p))
+    expect_true(all(m$coordinate >= start(r) & m$coordinate <= end(r)))
+})

@@ -49,6 +49,11 @@ We take transcript region to expain the differences of these three regions (tx: 
 (2) start_site region with (upstream = upstream = 100) refers to 900-1100bp.
 
 (3) end_site region with (upstream = upstream = 100) refers to 1300-1500bp.
+
+The regions keep the chromosome lengths (`seqinfo()`) of `TxDb` in `attr(, "ref_seqinfo")`;
+`getTagMatrix()` checks the genome build of the peaks against them (see [annoChecks()]).
+A self-made `GRanges` has lengths only when they were set (`seqlengths()`); without them
+the build cannot be checked.
 }
 \examples{
 require(TxDb.Hsapiens.UCSC.hg38.knownGene)

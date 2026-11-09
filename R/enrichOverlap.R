@@ -136,6 +136,14 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #' direction-free measure is needed, and increase `nShuffle` to reduce the
 #' Monte-Carlo part.
 #'
+#' Strand is ignored by every method and every column: a peak overlaps a target region
+#' whatever the strand of either, as for peaks of DNA-based assays, which have none.
+#' Annotation sets used as targets (genes, transposable elements) usually carry `+`/`-`
+#' strand, and the shuffled sets of the null distribution have none, so the observed
+#' overlap is counted without strand as well (earlier versions counted it with strand and
+#' reported `N_OL = 0` and `p = 1` for a stranded target set). For a strand-specific
+#' question, split both sets by strand and call the function once per strand.
+#'
 #' @title enrichPeakOverlap
 #' @param queryPeak query bed file or GRanges object
 #' @param targetPeak target bed file(s) or folder that containing bed files or a list of GRanges objects
@@ -194,8 +202,8 @@ enrichAnnoOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
 #'   `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
 #'   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
 #'   union), `frac_query` (fraction of query peaks overlapping the target set) and
-#'   `frac_target` (fraction of target peaks overlapping the query). Strand is ignored for
-#'   the effect sizes. With a null distribution (`nShuffle > 0`) also `expected`, the mean
+#'   `frac_target` (fraction of target peaks overlapping the query). Strand is ignored
+#'   throughout (see Details). With a null distribution (`nShuffle > 0`) also `expected`, the mean
 #'   N_OL under the null, and `fold_enrichment` = N_OL / expected, which corrects for the
 #'   size of each target set (and, with `background`, for where peaks can be). The p-value
 #'   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
@@ -247,6 +255,12 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
         chain <- import.chain(chainFile)
         target.gr <- lapply(target.gr, liftOver, chain = chain)
     }
+
+    ## Strand is ignored by every method (see Details). The observed overlap used to keep
+    ## strand (intersect() pairs "*" only with "*") while the shuffled sets were unstranded,
+    ## so a target set with +/- strand (genes, TEs) gave N_OL = 0 and p = 1 without a warning.
+    query.gr <- .unstrand_gr(query.gr)
+    target.gr <- lapply(target.gr, .unstrand_gr)
 
     if (is(queryPeak, "GRanges")) {
         qSample <- "queryPeak"
@@ -386,6 +400,12 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
     ), .frequency = "once", .frequency_id = "epiSeeker_whole_genome_null")
 }
 
+## strand set to "*" (mcols kept): peak overlap ignores strand
+.unstrand_gr <- function(gr) {
+    strand(gr) <- "*"
+    gr
+}
+
 ## Effect sizes that do not depend on a null distribution, one row per target set:
 ## base-pair Jaccard of the reduced sets, and the fraction of query (target) peaks that
 ## overlap the other set. Strand is ignored. Unlike the p-value, whose smallest value
@@ -419,15 +439,13 @@ enrichPeakOverlap <- function(queryPeak, targetPeak, TxDb = NULL, pAdjustMethod 
          frac_target = unname(m["frac_target", ]))
 }
 
-## length(intersect(query.gr, tt)) for every target set, from the overlapping pairs of the
-## (strand-wise) reduced sets; as in intersect(), "*" pairs only with "*", "+" with "+"
+## length(intersect(query.gr, tt, ignore.strand = TRUE)) for every target set, from the
+## overlapping pairs of the reduced sets (strand ignored, as everywhere in enrichPeakOverlap())
 .n_intersect <- function(query.gr, target.gr) {
-    q <- GenomicRanges::reduce(granges(query.gr))
-    qs <- as.character(strand(q))
+    q <- GenomicRanges::reduce(granges(query.gr), ignore.strand = TRUE)
     one <- function(tt) {
-        t <- GenomicRanges::reduce(granges(tt))
-        h <- GenomicRanges::findOverlaps(q, t, ignore.strand = TRUE)
-        as.numeric(sum(qs[S4Vectors::queryHits(h)] == as.character(strand(t))[S4Vectors::subjectHits(h)]))
+        t <- GenomicRanges::reduce(granges(tt), ignore.strand = TRUE)
+        as.numeric(length(GenomicRanges::findOverlaps(q, t, ignore.strand = TRUE)))
     }
     withCallingHandlers(vapply(target.gr, one, numeric(1)), warning = function(w) {
         if (grepl("no sequence levels in common", conditionMessage(w))) invokeRestart("muffleWarning")
@@ -445,7 +463,7 @@ setOldClass(c("peakOverlapResult", "data.frame"))
     if (is.null(res$odds_ratio)) res$odds_ratio <- NA_real_
     attr(res, "params") <- list(nShuffle = nShuffle, pool = pool, symmetric = symmetric,
                                 pAdjustMethod = pAdjustMethod, liftOver = !is.null(chainFile),
-                                genome = genome, null = null, method = method,
+                                genome = genome, null = null, method = method, strand = "ignored",
                                 strata = if (is.null(fisher)) NA_integer_ else fisher$strata,
                                 universe_units = if (is.null(fisher)) NA_integer_ else fisher$units,
                                 query_outside_universe = if (is.null(fisher)) NA_integer_ else fisher$query_outside,
@@ -580,11 +598,11 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
 
     if (Sys.info()[1] == "Windows") {
         qLen <- lapply(target.gr, function(tt) {
-            length(intersect(query.gr, tt))
+            length(intersect(query.gr, tt, ignore.strand = TRUE))
         })
     } else {
         qLen <- mclapply(target.gr, function(tt) {
-            length(intersect(query.gr, tt))
+            length(intersect(query.gr, tt, ignore.strand = TRUE))
         }, mc.cores = mc.cores)
     }
     qLen <- unlist(qLen)
@@ -606,7 +624,7 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
             }
             i <- idx[j]
             tarShuffle <- shuffle(target.gr[[i]], TxDb)
-            length(intersect(query.gr, tarShuffle)) / len[i]
+            length(intersect(query.gr, tarShuffle, ignore.strand = TRUE)) / len[i]
         })
     } else {
         rr <- mclapply(seq_along(idx), function(j) {
@@ -615,7 +633,7 @@ enrichOverlap.peak.internal <- function(query.gr, target.gr, TxDb, nShuffle = 10
             }
             i <- idx[j]
             tarShuffle <- shuffle(target.gr[[i]], TxDb)
-            length(intersect(query.gr, tarShuffle)) / len[i]
+            length(intersect(query.gr, tarShuffle, ignore.strand = TRUE)) / len[i]
         }, mc.cores = mc.cores)
     }
 
@@ -757,7 +775,7 @@ enrichOverlap.peak.mirrored <- function(query.gr, target.gr, TxDb, nShuffle = 10
     }
 
     obs <- unlist(lapply(target.gr, function(tt) {
-        length(intersect(query.gr, tt))
+        length(intersect(query.gr, tt, ignore.strand = TRUE))
     }))
 
     if (nShuffle < 1) {
@@ -776,7 +794,7 @@ enrichOverlap.peak.mirrored <- function(query.gr, target.gr, TxDb, nShuffle = 10
         ## overlap (0 or 1) compared with the observed ratio, so the null did not depend
         ## on the data: two sets with no overlap at all came out at p = 0.02
         qShuffle <- shuffle(query.gr, TxDb)
-        unlist(lapply(target.gr, function(tt) length(intersect(qShuffle, tt))))
+        unlist(lapply(target.gr, function(tt) length(intersect(qShuffle, tt, ignore.strand = TRUE))))
     }
 
     if (Sys.info()[1] == "Windows") {

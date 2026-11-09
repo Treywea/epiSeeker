@@ -7,10 +7,11 @@
 annoChecks(x)
 }
 \arguments{
-\item{x}{a `csAnno` object}
+\item{x}{a `csAnno` object, or a tag matrix (or list of them) from `getTagMatrix()`}
 }
 \value{
-a list with elements `build`, `dropped` and, if checked, `assay`; or `NULL`
+a list with elements `build`, `dropped` and, if checked, `assay` (`csAnno`), or
+  `build` and `short_regions` (tag matrix), or `NULL`
 }
 \description{
 `annotateSeq()` checks two silent errors and keeps what it finds with the annotation:
@@ -33,6 +34,25 @@ a list with elements `build`, `dropped` and, if checked, `assay`; or `NULL`
     whether the peaks look like the declared assay.
 }
 Objects made before these checks existed return `NULL`.
+}
+\details{
+The build check also runs when the annotation is a `GRanges` (a custom set of regions such
+as transposable elements or enhancers, passed as `TxDb`), against `seqlengths()` of that
+`GRanges`. A `GRanges` carries chromosome lengths only when they were set (a bed file read
+with `readPeakFile()` has none); then the build cannot be checked: `seqlengths_known` is
+`FALSE`, `note` says so, a message is shown and `show()` reports it. Set the lengths of
+the genome the regions belong to (for example `seqlengths(te) <- seqlengths(txdb)[seqlevels(te)]`)
+to have it checked. Also recorded: chromosome lengths recorded on the peaks that differ
+from the annotation's (`seqlength_conflicts`) and different genome tags (`genome_conflict`),
+both counted as evidence of a mismatch, and the number of peaks on chromosomes without a
+known length (`n_peaks_unchecked`).
+
+`getTagMatrix()` runs the same build check of the peaks against the regions (`windows`,
+or the regions made from `TxDb`), which keep the chromosome lengths of the annotation they
+were made from (`getBioRegion()`), and keeps it with the matrix: `annoChecks(<tag matrix>)`
+returns `build` and, for `type = "body"`, `short_regions` (regions with peaks that are not
+in the matrix because they are not longer than the number of bins). For a list of
+matrices it returns a list.
 }
 \examples{
 data(peakAnno)

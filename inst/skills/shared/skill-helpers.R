@@ -174,6 +174,9 @@ skill_check_anno <- function(anno, what, allow_suspect = FALSE, step = "correctn
     if (isTRUE(b$suspect)) {
         skill_check(step, paste("genome build of", what), if (isTRUE(allow_suspect)) "WARN" else "STOP",
                     paste(c(b$reasons, if (!isTRUE(allow_suspect)) "fix the build (liftOver or the right TxDb); --allow_suspect only if you know why"), collapse = "; "))
+    } else if (isFALSE(b$seqlengths_known)) {
+        skill_check(step, paste("genome build of", what), "NOTE",
+                    "not checked: the annotation has no chromosome lengths (set seqlengths() to check it)")
     } else if (!isTRUE(b$reliable)) {
         skill_check(step, paste("genome build of", what), "NOTE",
                     paste0("no peak beyond chromosome ends, but only ", b$n_peaks,
