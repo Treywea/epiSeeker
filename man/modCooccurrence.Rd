@@ -62,4 +62,12 @@ a numeric vector named by read id gives any other per-read covariate. The unadju
 odds ratio and p-value are always returned; the default stays `adjust = "none"`, so results
 made before the option are unchanged -- use `adjust = "read"` before calling regions
 co-open.
+
+The adjustment is only as good as the covariate: a noisy measure of a read's openness leaves
+part of the confounding (too many positives), a strongly predictive one can over-adjust. The
+recommended check is therefore the same test on distance-matched control pairs -- regions at
+the same distances that are not expected to open together (e.g. away from any peak) --
+counted the same way: report the rate of positive pairs among the controls next to the rate
+among the pairs of interest, unadjusted and adjusted. A per-read covariate computed elsewhere
+(e.g. openness outside all elements of a locus) can be given as `covariate`.
 }

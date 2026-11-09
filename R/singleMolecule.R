@@ -378,6 +378,14 @@ modReadMatrix <- function(x, regions, type = "msp", fire_only = FALSE) {
 #' made before the option are unchanged -- use `adjust = "read"` before calling regions
 #' co-open.
 #'
+#' The adjustment is only as good as the covariate: a noisy measure of a read's openness leaves
+#' part of the confounding (too many positives), a strongly predictive one can over-adjust. The
+#' recommended check is therefore the same test on distance-matched control pairs -- regions at
+#' the same distances that are not expected to open together (e.g. away from any peak) --
+#' counted the same way: report the rate of positive pairs among the controls next to the rate
+#' among the pairs of interest, unadjusted and adjusted. A per-read covariate computed elsewhere
+#' (e.g. openness outside all elements of a locus) can be given as `covariate`.
+#'
 #' @param x per-read calls from [readModCalls()].
 #' @param region1,region2 `GRanges` of length one.
 #' @param type,fire_only passed to [modReadMatrix()].

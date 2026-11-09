@@ -11,7 +11,9 @@
   each read's overall openness (logistic regression, or `method = "cmh"` stratified by its
   quantiles; covariate outside the two regions by default). Per-read differences in labelling
   made 7 of 44 FIRE-element pairs and 23% of distance-matched control pairs look co-open on
-  COLO829BL Fiber-seq; adjusted, 1 of 44. The default stays `adjust = "none"` (2026-11-09).
+  COLO829BL Fiber-seq; adjusted, 1 of 44. The default stays `adjust = "none"`; distance-matched
+  control pairs remain the recommended check, since a noisy covariate leaves part of the
+  confounding (2026-11-09).
 
 + Agent skills in `inst/skills/` (`system.file("skills", package = "epiSeeker")`): `range-tf`,
   `base-methylation`, `interaction-loops` and `range-singlecell`, each a `SKILL.md` (Agent Skills

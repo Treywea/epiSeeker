@@ -38,7 +38,9 @@ and present it as an epiSeeker result.
   `modReadMatrix(reads, regions, type =)`; `modCooccurrence(reads, region1, region2, type =,
   adjust = "read")` for whether two regions are modified on the same molecules (needs reads
   spanning both). Report the adjusted result: molecules differ in overall openness / labelling,
-  which makes unrelated regions look co-modified in the unadjusted test.
+  which makes unrelated regions look co-modified in the unadjusted test. The adjustment can
+  leave part of it; for a claim, run the same test on distance-matched control pairs (same
+  distances, away from peaks) and report their positive rate next to that of the pairs.
 - DMRs from DSS, methylKit or dmrseq are intervals: `readDMR(file)` gives a GRanges with
   `effect`, `direction`, `pvalue`, `qvalue`; annotate it with `annotateSeq()`, split by
   `direction` for hyper / hypo genes.
