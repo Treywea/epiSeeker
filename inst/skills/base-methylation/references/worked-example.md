@@ -42,7 +42,9 @@ calls at the site because modkit lists every tested base (NOTE recording this).
 `modCooccurrence()` of the two halves of the region: 40 reads span both, but the test is NA
 (`tables/cooccurrence.tsv`) - in the first half every read counts as modified (0.61-0.75 of its
 CpGs modified, above the 0.5 cutoff), so a margin of the 2x2 table is empty. The script reports
-this as "not testable", not as "no association".
+this as "not testable", not as "no association". The test adjusted for each read's level
+outside the two halves (`adjust = "read"`, columns `adj_odds_ratio`, `adj_p_value`) is NA for the
+same reason.
 
 **What can be said.** "The per-read path runs from the table to a bmData, a read plot and a
 co-occurrence test; whether the two halves are modified on the same molecules cannot be tested here."

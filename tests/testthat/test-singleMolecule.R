@@ -166,3 +166,77 @@ test_that("per-read matrix and co-occurrence go in the right direction", {
     expect_gt(co2$p_value, 0.5)
     expect_s3_class(plotModReads(x, GenomicRanges::GRanges("chr1:1-3000"), peaks = c(r1, r2)), "ggplot")
 })
+
+## fibertools-like table: read i spans 0-6000, MSPs given as 0-based starts and lengths
+sm_reads_table <- function(msps) {
+    rows <- vapply(seq_along(msps), function(i) {
+        s <- msps[[i]]
+        paste("chr1", 0, 6000, paste0("r", i), 0, "+", ".", ".", ".",
+              if (length(s)) paste(s[, 1], collapse = ",") else ".",
+              if (length(s)) paste(s[, 2], collapse = ",") else ".",
+              if (length(s)) paste(rep(100, nrow(s)), collapse = ",") else ".", sep = "\t")
+    }, "")
+    f <- tempfile(fileext = ".tsv")
+    writeLines(c(paste("#ct", "st", "en", "fiber", "score", "strand", "HP", "ref_m6a", "m6a_qual",
+                       "ref_msp_starts", "ref_msp_lengths", "fire", sep = "\t"), rows), f)
+    readModCalls(f)
+}
+
+test_that("modCooccurrence(adjust = \"read\") removes an association made by per-read openness", {
+    r1 <- GenomicRanges::GRanges("chr1:1001-1100"); r2 <- GenomicRanges::GRanges("chr1:3001-3100")
+    ## per-read confound: "high" reads carry MSPs over much of the read and open each region in
+    ## 80% of reads, "low" reads in 10%; within each kind the two regions are exactly independent
+    n <- 400
+    high <- rep(c(TRUE, FALSE), each = n / 2)
+    k <- seq_len(n / 2)
+    o1 <- c(k <= 160, k <= 20)
+    o2 <- c(k <= 128 | (k > 160 & k <= 192), k <= 2 | (k > 20 & k <= 38))
+    msps <- lapply(seq_len(n), function(i) {
+        bg <- if (high[i]) seq(4000, 5800, by = 200) else c(4000, 5000)  # background MSPs outside the regions
+        rbind(if (o1[i]) c(1000, 100), if (o2[i]) c(3000, 100), cbind(bg, if (high[i]) 150 else 60))
+    })
+    x <- sm_reads_table(msps)
+    old <- modCooccurrence(x, r1, r2)
+    expect_equal(old$adjust, "none")
+    expect_null(old$adj_p_value)
+    expect_lt(old$p_value, 0.01)
+    expect_gt(old$odds_ratio, 1)
+    lg <- modCooccurrence(x, r1, r2, adjust = "read")
+    expect_identical(lg$table, old$table)
+    expect_equal(lg$p_value, old$p_value)
+    expect_gt(lg$adj_p_value, 0.05)
+    expect_equal(lg$adjust_method, "logistic")
+    expect_match(lg$covariate$how, "outside the two regions")
+    cm <- modCooccurrence(x, r1, r2, adjust = "read", method = "cmh")
+    expect_gt(cm$adj_p_value, 0.05)
+    ## the "outside" covariate leaves out both regions: read 201 ("low", both regions open) has
+    ## background MSPs of 2 x 60 bp over 6000 - 200 bp; the whole read adds the two 100-bp MSPs
+    cv <- epiSeeker:::.sm_read_openness(x, "msp", exclude = c(r1, r2))
+    expect_equal(unname(cv["r201"]), 120 / 5800)
+    cv_all <- epiSeeker:::.sm_read_openness(x, "msp")
+    expect_equal(unname(cv_all["r201"]), 320 / 6000)
+    expect_gt(modCooccurrence(x, r1, r2, adjust = "read", covariate = "all")$adj_p_value, 0.05)
+    ## a numeric covariate is used as given
+    nm <- modCooccurrence(x, r1, r2, adjust = "read", covariate = stats::setNames(as.numeric(high), paste0("r", seq_len(n))))
+    expect_gt(nm$adj_p_value, 0.05)
+    expect_match(nm$covariate$how, "given by the user")
+    expect_error(modCooccurrence(x, r1, r2, adjust = "read", covariate = 1:3), "named by read id")
+})
+
+test_that("modCooccurrence(adjust = \"read\") keeps a real same-molecule association", {
+    r1 <- GenomicRanges::GRanges("chr1:1001-1100"); r2 <- GenomicRanges::GRanges("chr1:3001-3100")
+    set.seed(7)
+    n <- 200
+    msps <- lapply(seq_len(n), function(i) {
+        o1 <- runif(1) < 0.5
+        o2 <- if (runif(1) < 0.85) o1 else !o1          # region 2 follows region 1 on the molecule
+        nbg <- sample(1:8, 1)                             # openness elsewhere, unrelated to the pair
+        rbind(if (o1) c(1000, 100), if (o2) c(3000, 100), cbind(4000 + 200 * seq_len(nbg), 100))
+    })
+    x <- sm_reads_table(msps)
+    for (m in c("logistic", "cmh")) {
+        co <- modCooccurrence(x, r1, r2, adjust = "read", method = m)
+        expect_lt(co$adj_p_value, 0.01)
+        expect_gt(co$adj_odds_ratio, 1)
+    }
+})

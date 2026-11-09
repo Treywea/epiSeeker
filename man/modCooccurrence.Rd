@@ -10,7 +10,11 @@ modCooccurrence(
   region2,
   type = "msp",
   fire_only = FALSE,
-  cutoff = 0.5
+  cutoff = 0.5,
+  adjust = c("none", "read"),
+  method = c("logistic", "cmh"),
+  covariate = "outside",
+  strata = 4
 )
 }
 \arguments{
@@ -21,14 +25,49 @@ modCooccurrence(
 \item{type, fire_only}{passed to [modReadMatrix()].}
 
 \item{cutoff}{value at or above which a region counts as open on a read.}
+
+\item{adjust}{`"none"` or `"read"` (adjust for each read's overall openness).}
+
+\item{method}{with `adjust = "read"`: `"logistic"` or `"cmh"`.}
+
+\item{covariate}{with `adjust = "read"`: `"outside"` (the read outside the two regions),
+`"all"` (the whole read), or a numeric vector named by read id.}
+
+\item{strata}{number of quantile strata of the covariate for `method = "cmh"`.}
 }
 \value{
 a list with `table`, `n_reads`, `odds_ratio` and `p_value` (`NA` when fewer than 2
-  reads span both regions or a margin is empty).
+  reads span both regions or a margin is empty), and `adjust`; with `adjust = "read"` also
+  `adj_odds_ratio` and `adj_p_value` (conditional on the covariate), `adjust_method` and
+  `covariate` (how it was made, and its median and IQR over the reads tested).
 }
 \description{
 For the reads that span both regions, whether each region is open (or modified) on that read
 -- value of [modReadMatrix()] at least `cutoff` -- crossed in a 2-by-2 table and tested with
 Fisher's exact test. A positive association means the two regions tend to open together on
 the same molecule, which a bulk profile cannot show.
+}
+\details{
+Molecules differ in how much of them is open or labelled at all (e.g. uneven m6A labelling
+in Fiber-seq): a read with many MSPs everywhere is more likely to be open at both regions,
+which makes unrelated regions look co-open. On real COLO829BL Fiber-seq, 7 of 44 pairs of
+FIRE elements were positive by the unadjusted test and 23% of distance-matched non-FIRE
+pairs as well. `adjust = "read"` tests the association given each read's overall openness
+(its fraction covered by `type`, or for a base-level type its modified fraction or
+modifications per kb): by logistic regression of region 2 on region 1 and the covariate
+(`method = "logistic"`), or by a Cochran-Mantel-Haenszel test stratified by quantiles of the
+covariate (`method = "cmh"`). By default the covariate leaves out the two regions
+(`covariate = "outside"`), so it does not contain the outcome; `"all"` uses the whole read;
+a numeric vector named by read id gives any other per-read covariate. The unadjusted table,
+odds ratio and p-value are always returned; the default stays `adjust = "none"`, so results
+made before the option are unchanged -- use `adjust = "read"` before calling regions
+co-open.
+
+The adjustment is only as good as the covariate: a noisy measure of a read's openness leaves
+part of the confounding (too many positives), a strongly predictive one can over-adjust. The
+recommended check is therefore the same test on distance-matched control pairs -- regions at
+the same distances that are not expected to open together (e.g. away from any peak) --
+counted the same way: report the rate of positive pairs among the controls next to the rate
+among the pairs of interest, unadjusted and adjusted. A per-read covariate computed elsewhere
+(e.g. openness outside all elements of a locus) can be given as `covariate`.
 }

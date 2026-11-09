@@ -32,7 +32,7 @@
     qc <- .assay_qc_for(x, assay)
     sections <- list()
     sections$overview <- .digest_overview(x, n, context, assay, question, qc)
-    sections$top_regions <- .digest_regions(df, gene, feature, ord$column, n_regions)
+    sections$top_regions <- .digest_regions(df, gene, feature, ord$column, n_regions, ord$label)
     genes <- .digest_genes(gene, feature, max_genes, n_distal_genes)
     sections$genes <- genes$text
     ov <- .digest_overlap(overlap, n_overlap)
@@ -56,13 +56,17 @@
             overlap = if (is.null(ov)) NULL else ov$table,
             annoStat = x@annoStat
         ),
-        totals = list(n_regions = n, n_regions_sent = min(n, n_regions), rank_by = ord$column),
+        totals = list(n_regions = n, n_regions_sent = min(n, n_regions), rank_by = ord$label),
         assay_qc = qc
     ), class = "seq_digest")
 }
 
-## rank regions by a signal column (descending) or, without one, by distance to TSS
+## rank regions by a signal column (descending); DMRs from readDMR() by the absolute effect
+## (hyper and hypo alike); without either, by distance to TSS
 .rank_regions <- function(df, signal) {
+    if (is.null(signal) && .is_dmr_table(df)) {
+        return(list(index = order(-abs(df$effect), na.last = TRUE), column = "effect", label = "|effect|"))
+    }
     if (!is.null(signal)) {
         if (!signal %in% names(df)) stop("`signal` column '", signal, "' not found in the regions.")
     } else {
@@ -70,9 +74,10 @@
         if (!is.na(signal) && !is.numeric(df[[signal]])) signal <- NA
     }
     if (is.null(signal) || is.na(signal)) {
-        return(list(index = order(abs(df$distanceToTSS)), column = "|distanceToTSS| (no signal column)"))
+        lab <- "|distanceToTSS| (no signal column)"
+        return(list(index = order(abs(df$distanceToTSS)), column = lab, label = lab))
     }
-    list(index = order(-df[[signal]], na.last = TRUE), column = signal)
+    list(index = order(-df[[signal]], na.last = TRUE), column = signal, label = signal)
 }
 
 ## the gene a region is assigned to: symbol when annotated, otherwise the gene id
@@ -106,6 +111,7 @@
         x@tssRegion[1], " to ", x@tssRegion[2], " bp)\n",
         "Genome: ", .source_line(x), "\n",
         .group_line(list(x)),
+        .dmr_line(x@anno),
         .checks_line(x),
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
         if (!is.null(qc)) paste0(.assayqc_line(qc), "\n"),
@@ -162,7 +168,13 @@
            if (length(bits)) paste0(" (", paste(bits, collapse = "; "), ")"))
 }
 
-.digest_regions <- function(df, gene, feature, rank_by, n_regions) {
+## regions from readDMR(): a numeric effect with hyper / hypo directions
+.is_dmr_table <- function(df) {
+    all(c("effect", "direction") %in% names(df)) && is.numeric(df$effect) && any(!is.na(df$effect)) &&
+        all(df$direction %in% c("hyper", "hypo", NA))
+}
+
+.digest_regions <- function(df, gene, feature, rank_by, n_regions, label = rank_by) {
     k <- min(nrow(df), n_regions)
     d <- df[seq_len(k), , drop = FALSE]
     sig <- if (rank_by %in% names(d)) paste0("\t", signif(d[[rank_by]], 4)) else ""
@@ -170,7 +182,7 @@
                     feature[seq_len(k)], "\t", gene[seq_len(k)], "\t", d$distanceToTSS, sig)
     header <- paste0("rank\tregion\twidth\tfeature\tnearest_gene\tdistance_to_TSS",
                      if (nzchar(sig[1])) paste0("\t", rank_by) else "")
-    paste0("## Top regions (", k, " of ", nrow(df), ", ranked by ", rank_by, ")\n",
+    paste0("## Top regions (", k, " of ", nrow(df), ", ranked by ", label, ")\n",
            header, "\n", paste(lines, collapse = "\n"))
 }
 
@@ -304,7 +316,7 @@
         df <- df[ord$index, , drop = FALSE]
         gene <- .region_gene(df)
         feature <- .short_annotation(df$annotation)
-        list(a = a, df = df, gene = gene, feature = feature, rank_by = ord$column,
+        list(a = a, df = df, gene = gene, feature = feature, rank_by = ord$column, label = ord$label,
              prom = unique(gene[grepl("^Promoter", feature) & !is.na(gene)]))
     })
     sections <- list()
@@ -312,6 +324,7 @@
         "## Overview\n",
         "Groups: ", paste0(grp, " (", vapply(per, function(p) nrow(p$df), 0), " regions)", collapse = ", "), "\n",
         .group_line(x),
+        paste(vapply(grp, function(g) .dmr_line(x[[g]]@anno, prefix = paste0("DMRs (", g, "): ")), ""), collapse = ""),
         "Genome: ", paste(unique(vapply(x, .source_line, "")), collapse = " | "), "\n",
         paste(vapply(grp, function(g) .checks_line(x[[g]], prefix = paste0("Checks (", g, "): ")), ""),
               collapse = ""),
@@ -354,7 +367,7 @@
     sections$top_regions <- paste(vapply(grp, function(g) {
         p <- per[[g]]
         sub("^## Top regions", paste0("## Top regions of ", g),
-            .digest_regions(p$df, p$gene, p$feature, p$rank_by, n_regions))
+            .digest_regions(p$df, p$gene, p$feature, p$rank_by, n_regions, p$label))
     }, ""), collapse = "\n\n")
     structure(list(
         text = paste(unlist(sections), collapse = "\n\n"),
