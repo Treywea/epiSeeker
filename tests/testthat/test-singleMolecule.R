@@ -223,6 +223,28 @@ test_that("modCooccurrence(adjust = \"read\") removes an association made by per
     expect_error(modCooccurrence(x, r1, r2, adjust = "read", covariate = 1:3), "named by read id")
 })
 
+test_that("modCooccurrence(adjust = \"read\") with a numeric covariate equals glm(open2 ~ open1 + covariate)", {
+    ## the base-singlemolecule skill passes its own per-read covariate and used to fit this glm itself
+    r1 <- GenomicRanges::GRanges("chr1:1001-1100"); r2 <- GenomicRanges::GRanges("chr1:3001-3100")
+    set.seed(11)
+    n <- 150
+    z <- stats::rnorm(n)
+    msps <- lapply(seq_len(n), function(i) {
+        o1 <- stats::runif(1) < stats::plogis(z[i]); o2 <- stats::runif(1) < stats::plogis(z[i])
+        rbind(if (o1) c(1000, 100), if (o2) c(3000, 100), c(4000, 60))
+    })
+    x <- sm_reads_table(msps)
+    cv <- stats::setNames(z + stats::rnorm(n, sd = 0.5), paste0("r", seq_len(n)))
+    co <- modCooccurrence(x, r1, r2, adjust = "read", method = "logistic", covariate = cv)
+    m <- modReadMatrix(x, c(r1, r2), type = "msp")
+    ok <- stats::complete.cases(m)
+    d <- data.frame(o1 = m[ok, 1] >= 0.5, o2 = m[ok, 2] >= 0.5, cv = cv[rownames(m)[ok]])
+    cf <- summary(stats::glm(o2 ~ o1 + cv, family = stats::binomial, data = d))$coefficients
+    expect_equal(co$adj_odds_ratio, exp(cf["o1TRUE", 1]))
+    expect_equal(co$adj_p_value, cf["o1TRUE", 4])
+    expect_equal(co$n_reads, nrow(d))
+})
+
 test_that("modCooccurrence(adjust = \"read\") keeps a real same-molecule association", {
     r1 <- GenomicRanges::GRanges("chr1:1001-1100"); r2 <- GenomicRanges::GRanges("chr1:3001-3100")
     set.seed(7)

@@ -21,7 +21,7 @@ MSP fraction, and 23% of distance-matched non-FIRE control pairs were "co-open" 
 3. **Elements** (`--elements`, e.g. FIRE peaks, DNase / ATAC peaks): their seqlevels style must
    match the reads; elements no read spans are dropped (WARN when fewer than half are spanned).
 
-## 2. Analysis (epiSeeker functions only, plus the adjustment)
+## 2. Analysis (epiSeeker functions only)
 - `summarizeModCalls(reads, type =)` -> `bmData` (5mC if present, else m6A); coverage counted as
   calls (modkit) or spanning reads (fibertools).
 - Elements: `annotateSeq()` with a TxDb; per read and element `modReadMatrix(reads, elements,
@@ -29,9 +29,14 @@ MSP fraction, and 23% of distance-matched non-FIRE control pairs were "co-open" 
 - Per-read covariate (`tables/reads.tsv`): for `msp` / `nuc`, the fraction of the read **outside
   the elements** covered by that type; for base types, the fraction (modkit) or per-kb count
   (fibertools) of modified calls outside the elements.
-- Pairs of elements 1-10 kb apart: `modCooccurrence(reads, e1, e2, type =)` (unadjusted Fisher
-  test), and the same reads re-fitted as `glm(open2 ~ open1 + covariate, binomial)` (adjusted
-  odds ratio; `modCooccurrence()` has no such option yet) - `tables/cooccurrence.tsv`.
+- Pairs of elements 1-10 kb apart: `modCooccurrence(reads, e1, e2, type =, adjust = "read",
+  method = "logistic", covariate = <the per-read covariate, named by read id>)` - the unadjusted
+  Fisher test (`odds_ratio`, `p_value`) and, on the same reads, `glm(open2 ~ open1 + covariate,
+  binomial)` (`adj_odds_ratio`, `adj_p_value`) - `tables/cooccurrence.tsv`.
+- **Distance-matched control pairs**: the adjustment is only as good as its covariate (a noisy one
+  leaves part of the confound, a strongly predictive one over-adjusts). Before calling pairs
+  co-open, run the same test on control pairs at the same distances away from the elements and
+  report their positive rate next to that of the pairs.
 - `plotModReads(reads, region, peaks = elements)`.
 
 ## 3. Correctness checks
@@ -54,7 +59,8 @@ reads, cooccurrence, elements_annotation), `report/report.md`, `provenance/` (ru
 checks.tsv, sessionInfo.txt, interpret_provenance.txt, objects.rds; the simulated table).
 
 ## Do not say
-- "elements A and B open together / are coordinated / cooperate" from unadjusted co-occurrence.
+- "elements A and B open together / are coordinated / cooperate" from unadjusted co-occurrence,
+  or from the adjusted test without distance-matched control pairs.
 - Any co-occurrence statement from bulk levels; only per-read data can show it.
 - "the element regulates ..." from openness on reads.
 - Anything biological about the example: its reads are simulated to show the confound.

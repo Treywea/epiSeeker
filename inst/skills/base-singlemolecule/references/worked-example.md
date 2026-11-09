@@ -24,7 +24,7 @@ covered by MSPs (median 0.095, IQR 0.062-0.153). Median Spearman(open at an elem
 
 **Co-occurrence** (`tables/cooccurrence.tsv`, 102 pairs 1-10 kb apart, all testable):
 
-| run | OR > 1 and p < 0.05, unadjusted (`modCooccurrence()`) | adjusted for the covariate (glm) |
+| run | OR > 1 and p < 0.05, unadjusted (`modCooccurrence()`) | adjusted for the covariate (`modCooccurrence(adjust = "read")`) |
 |---|---|---|
 | example (reads differ) | 73 of 102 | 7 of 102 |
 | control (equal reads) | 0 of 102 | 0 of 102 |

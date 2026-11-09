@@ -181,8 +181,9 @@ if (!is.null(el) && length(el)) {
                         cv_def, q[2], q[1], q[3], rho_med, sum(!is.na(rho)),
                         if (!is.na(rho_med) && rho_med >= 0.1) "; reads open everywhere make every pair look co-open: raw co-occurrence is confounded, read the adjusted odds ratios" else ""))
 
-    ## co-occurrence of element pairs min_dist-max_dist apart: raw (modCooccurrence) and adjusted
-    ## for the per-read covariate (glm; modCooccurrence() has no such option yet)
+    ## co-occurrence of element pairs min_dist-max_dist apart: modCooccurrence() unadjusted (Fisher)
+    ## and adjusted for the per-read covariate above (adjust = "read", method = "logistic":
+    ## glm(open2 ~ open1 + covariate, binomial) on the reads spanning both elements)
     cen <- (GenomicRanges::start(el) + GenomicRanges::end(el)) / 2
     chr <- as.character(GenomicRanges::seqnames(el))
     pr <- which(outer(seq_along(el), seq_along(el), "<") & outer(chr, chr, "==") &
@@ -190,20 +191,11 @@ if (!is.null(el) && length(el)) {
     if (nrow(pr)) {
         co <- do.call(rbind, lapply(seq_len(nrow(pr)), function(k) {
             i <- pr[k, 1]; j <- pr[k, 2]
-            r <- modCooccurrence(reads, el[i], el[j], type = a$type, cutoff = cutoff)
-            ok <- stats::complete.cases(m[, c(i, j)])
-            adj <- c(NA_real_, NA_real_)
-            if (!is.na(r$p_value)) {
-                d <- data.frame(o1 = m[ok, i] >= cutoff, o2 = m[ok, j] >= cutoff, cv = cv[rownames(m)[ok]])
-                f <- tryCatch(suppressWarnings(stats::glm(o2 ~ o1 + cv, family = stats::binomial, data = d)), error = function(e) NULL)
-                if (!is.null(f) && f$converged && "o1TRUE" %in% rownames(summary(f)$coefficients)) {
-                    cf <- summary(f)$coefficients
-                    adj <- c(exp(cf["o1TRUE", 1]), cf["o1TRUE", 4])
-                }
-            }
+            r <- modCooccurrence(reads, el[i], el[j], type = a$type, cutoff = cutoff,
+                                 adjust = "read", method = "logistic", covariate = cv)
             data.frame(element1 = names(el)[i], element2 = names(el)[j], distance = round(abs(cen[j] - cen[i])),
                        n_reads = r$n_reads, odds_ratio_unadjusted = signif(r$odds_ratio, 4), p_unadjusted = signif(r$p_value, 4),
-                       odds_ratio_adjusted = signif(adj[1], 4), p_adjusted = signif(adj[2], 4))
+                       odds_ratio_adjusted = signif(r$adj_odds_ratio, 4), p_adjusted = signif(r$adj_p_value, 4))
         }))
         skill_table(co, "cooccurrence.tsv")
         testable <- !is.na(co$p_unadjusted)
@@ -250,8 +242,11 @@ sec <- list(
           paste0("- ", nrow(co), " pairs; OR > 1 and p < 0.05: ", sum(co$odds_ratio_unadjusted > 1 & co$p_unadjusted < 0.05, na.rm = TRUE),
                  " unadjusted, ", sum(co$odds_ratio_adjusted > 1 & co$p_adjusted < 0.05, na.rm = TRUE), " adjusted (tables/cooccurrence.tsv)"),
           "", paste("**Unadjusted co-occurrence is confounded by per-read openness**: a read that is labelled",
-                    "or opened more everywhere makes every pair of elements look co-open. Only the adjusted odds",
-                    "ratios (or a comparison with distance-matched control pairs) speak to elements opening together."))
+                    "or opened more everywhere makes every pair of elements look co-open. The adjustment",
+                    "(`modCooccurrence(adjust = \"read\")`) removes most of it but can leave part of it or over-adjust,",
+                    "depending on how well the covariate measures openness; before calling pairs co-open, run the",
+                    "same test on distance-matched control pairs (same distances, away from the elements) and",
+                    "report their positive rate next to that of the pairs."))
 )
 
 ## ---- 4. interpret() last -----------------------------------------------------------------

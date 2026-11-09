@@ -104,3 +104,18 @@ test_that("functions named in SKILL.md exist", {
         }
     }
 })
+
+test_that("base-singlemolecule adjusts co-occurrence with modCooccurrence(adjust = \"read\"), not its own model", {
+    f <- file.path(skills_dir, "base-singlemolecule", "scripts", "run_base_singlemolecule.R")
+    tk <- tokens(f)
+    calls <- tk$text[tk$token == "SYMBOL_FUNCTION_CALL"]
+    expect_false(any(calls %in% c("glm", "mantelhaen.test")))
+    txt <- paste(readLines(f, warn = FALSE), collapse = "\n")
+    expect_match(txt, "modCooccurrence\\([^)]*adjust = \"read\"[^)]*covariate = cv")
+    ## the table keeps its columns
+    for (col in c("odds_ratio_unadjusted", "p_unadjusted", "odds_ratio_adjusted", "p_adjusted"))
+        expect_match(txt, col, fixed = TRUE)
+    ## and the skill still asks for distance-matched control pairs
+    md <- paste(readLines(file.path(skills_dir, "base-singlemolecule", "SKILL.md"), warn = FALSE), collapse = " ")
+    expect_match(md, "distance-matched control pairs", fixed = TRUE)
+})
