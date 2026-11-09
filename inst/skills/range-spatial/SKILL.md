@@ -23,9 +23,11 @@ explained R^2 = 0.52 of the domains. So this skill checks first, then annotates.
 
 ## 2. Analysis (the artefact check first, then epiSeeker functions only)
 - Artefact check, before any annotation. Per spot: fragments (depth), chip row, chip column.
-  Balanced accuracy of LDA predicting the domain (5-fold x 5 repeats, folds stratified by domain,
-  as Fig 2) from log10 depth, from the row (one-hot), from the column (one-hot); kappa =
-  (accuracy - chance) / (1 - chance); R^2 of log10 depth ~ domain (`tables/artefact_check.tsv`,
+  Cross-validated balanced accuracy (5-fold x 5 repeats, folds stratified by domain, as Fig 2) of
+  predicting the domain from log10 depth (LDA, as Fig 2), from the chip row and from the chip
+  column (each row or column predicts the domain with the largest share of its training spots;
+  LDA on one-hot rows missed domains made of whole rows); kappa = (accuracy - chance) /
+  (1 - chance); R^2 of log10 depth ~ domain (`tables/artefact_check.tsv`,
   `figures/artefact_check.pdf`, `spatial_depth_log10.pdf` next to `spatial_groups.pdf`). With
   `--spot_scores` (per-spot biology, e.g. marker-module or gene-activity scores; csv, barcode
   first) the same for them.

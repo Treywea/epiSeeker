@@ -20,13 +20,13 @@ small (NOTE): with 100-300 fragments per spot, fewer tiles pass `min_fragments`.
 
 | predictor | balanced accuracy | chance | kappa |
 |---|---|---|---|
-| depth | 0.363 | 0.333 | 0.05 |
-| row | 0.381 | 0.333 | 0.07 |
-| column | 0.616 | 0.333 | 0.42 |
+| depth (LDA) | 0.363 | 0.333 | 0.05 |
+| row | 0.534 | 0.333 | 0.30 |
+| column | 0.726 | 0.333 | 0.59 |
 
-R^2 of log10 depth ~ domain 0.005. Depth: PASS (domains not explained by depth). Columns: **WARN**
-(kappa 0.42 >= 0.4): on a 14-column grid the outer domain owns the edge columns, so the column
-alone predicts it. That is what the check is for - it cannot tell banded anatomy from a channel
+R^2 of log10 depth ~ domain 0.005. Depth: PASS (domains not explained by depth). Rows: PASS
+(kappa 0.30). Columns: **WARN** (kappa 0.59 >= 0.4): on a 14-column grid the outer domain owns the
+edge columns, so the column alone predicts it well. That is what the check is for - it cannot tell banded anatomy from a channel
 artefact, the histology has to. No stripe (largest share of a domain in one row or column 30%).
 
 **Domains** (`tables/groups.tsv`, `annotation_stat.tsv`): AR_0M_like 170 regions, 18.8% within

@@ -91,7 +91,29 @@ cv_lda <- function(X, y, reps = 5, kf = 5) {
         bal_acc(y, pred)
     }, 0))
 }
-onehot <- function(f) { m <- stats::model.matrix(~ factor(f)); m[, -1, drop = FALSE] }
+## a single categorical predictor (chip row or column): in each training fold, every row (column)
+## predicts the domain that has the largest share of its training spots in it (equal priors, the
+## rule that maximises balanced accuracy); unseen categories predict the largest domain. LDA on
+## one-hot rows, as in the Fig 2 script, misses domains made of whole rows (planted error P16:
+## balanced accuracy 0.55 for domains that are three bands of rows).
+cv_cat <- function(f, y, reps = 5, kf = 5) {
+    y <- factor(y); f <- as.character(f)
+    mean(vapply(seq_len(reps), function(r) {
+        set.seed(r); folds <- integer(length(y))
+        for (lv in levels(y)) { i <- which(y == lv); folds[i] <- sample(rep_len(seq_len(kf), length(i))) }
+        pred <- factor(rep(NA, length(y)), levels = levels(y))
+        for (k in seq_len(kf)) {
+            tr <- folds != k
+            tab <- table(f[tr], y[tr])
+            share <- sweep(tab, 2, pmax(colSums(tab), 1), "/")
+            best <- stats::setNames(colnames(share)[max.col(share, ties.method = "first")], rownames(share))
+            p <- unname(best[f[!tr]])
+            p[is.na(p)] <- names(which.max(table(y[tr])))
+            pred[!tr] <- p
+        }
+        bal_acc(y, pred)
+    }, 0))
+}
 nspot <- table(sp$group)
 cvd <- sp[sp$group %in% names(nspot)[nspot >= 5], ]
 if (any(nspot < 5)) {
@@ -101,8 +123,8 @@ if (any(nspot < 5)) {
 if (length(unique(cvd$group)) < 2) skill_check("artefact", "two or more domains to check", "STOP", "fewer than 2 domains with >= 5 spots")
 k <- length(unique(cvd$group)); chance <- 1 / k
 kap <- function(ba) (ba - chance) / (1 - chance)
-ba <- c(depth = cv_lda(log10(cvd$depth), cvd$group), row = cv_lda(onehot(cvd$row), cvd$group),
-        column = cv_lda(onehot(cvd$col), cvd$group))
+ba <- c(depth = cv_lda(log10(cvd$depth), cvd$group), row = cv_cat(cvd$row, cvd$group),
+        column = cv_cat(cvd$col, cvd$group))
 if (!is.null(a$spot_scores)) {
     skill_input(a$spot_scores, "spot_scores")
     sc <- utils::read.csv(a$spot_scores, check.names = FALSE)
