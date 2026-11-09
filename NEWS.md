@@ -1,5 +1,13 @@
 # epiSeeker 1.1.4
 
++ Agent skills in `inst/skills/` (`system.file("skills", package = "epiSeeker")`): `range-tf`,
+  `base-methylation`, `interaction-loops` and `range-singlecell`, each a `SKILL.md` (Agent Skills
+  format) with one runnable script and a worked example on the package's data. All follow one
+  structure: input checks (genome build, seqlevels, assay), epiSeeker functions only, the built-in
+  correctness checks (`annoChecks()` etc.), `interpret()` last, provenance. The scripts stop on a
+  failed check, record every warning, and call a model only when one is given. A test checks the
+  format and that every function the skills name exists (2026-11-09).
+
 + `enrichPeakOverlap(method = "fisher")` tests every target set against the `background` as a
   universe, without permutations: the units are the background regions (overlapping ones merged,
   adjacent ones such as tiles kept apart) plus every query region outside them (so the table stays
