@@ -203,20 +203,14 @@ annotateSeq <- function(peak,
     ## build than TxDb. They report and record; the annotation itself is unchanged.
     dropped <- .anno_check_dropped(peak.in, peak.gr, TxDb, features)
     if (dropped$n > 0) warning(.dropped_message(dropped), call. = FALSE)
+    ## the build check runs for a GRanges annotation too (custom TE or enhancer sets are where
+    ## coordinates of another build turn up); it needs the chromosome lengths of the GRanges
+    ## and only records (and notes) that it could not run when there are none
     build <- NULL
-    if (!is_GRanges_of_TxDb && length(peak.gr) > 0) {
-        build <- .anno_check_build(peak.gr, features, TxDb)
-        build <- c(build, .build_suspect(build))
-        build$n_peaks <- length(peak.gr)
-        build$reliable <- length(peak.gr) >= .build_min_peaks
-        if (build$suspect) {
-            warning("The peaks may not be on the genome build of 'TxDb' (",
-                    paste(unique(stats::na.omit(GenomeInfoDb::genome(TxDb))), collapse = ","),
-                    "): ", paste(build$reasons, collapse = "; "), ". An annotation against the ",
-                    "wrong build looks normal but is wrong; check the genome of the peaks and ",
-                    "use the matching TxDb, or lift the peaks over (rtracklayer::liftOver()). ",
-                    "Details: annoChecks().", call. = FALSE)
-        }
+    if (length(peak.gr) > 0) {
+        ref_label <- if (is_GRanges_of_TxDb) "the annotation GRanges ('TxDb')" else "TxDb"
+        build <- .build_check(peak.gr, TxDb, features, ref_label = ref_label)
+        .report_build(build, ref_label)
     }
     checks <- list(build = build, dropped = dropped)
 

@@ -9,7 +9,8 @@ getTagMatrix_body(
   windows,
   nbin,
   verbose = TRUE,
-  ignore_strand = FALSE
+  ignore_strand = FALSE,
+  what = NULL
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ getTagMatrix_body(
 \item{verbose}{print message or not}
 
 \item{ignore_strand}{ignore the strand information or not}
+
+\item{what}{name of the set of regions, for the warnings}
 }
 \value{
 tagMatrix

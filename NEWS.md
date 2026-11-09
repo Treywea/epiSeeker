@@ -1,5 +1,34 @@
 # epiSeeker 1.1.4
 
++ Fixes from rerunning the 2025 case studies (2026-11-09):
+  - `enrichPeakOverlap()` ignores strand in every method and column. The observed overlap was
+    counted with strand (`intersect()` pairs `*` only with `*`) while the null shuffled unstranded
+    sets, so a target set with `+`/`-` strand (genes, transposable elements) gave `N_OL = 0` and
+    `p = 1` without a warning; `method = "fisher"` reported `N_OL = 0` the same way.
+    `attr(, "params")$strand` is `"ignored"`.
+  - `getMotifMatrix()` with more than one region placed the hits at wrong coordinates (the
+    region starts were recycled over the rows of the hits). Each hit is now placed in its own
+    region (new column `region`); hits of `-` strand regions are mapped back to the genome;
+    `attr(, "range")` spans the regions, `attr(, "regions")` keeps them. `plotMotifProf()` stops
+    for hits on several chromosomes.
+  - The genome-build check of `annotateSeq()` also runs when the annotation is a `GRanges`
+    (custom TE or enhancer sets), against its `seqlengths()`, and `getTagMatrix()` runs it for
+    every set of regions, against the chromosome lengths of the annotation the regions were made
+    from (kept by `getBioRegion()`). Chromosome lengths recorded on the peaks that differ from the
+    annotation's count as evidence too. A `GRanges` without lengths cannot be checked: a message
+    says so and `annoChecks()` records it (`seqlengths_known = FALSE`). `annoChecks()` accepts
+    tag matrices. hg38 peaks against TEs in T2T-CHM13 coordinates (the 2025 case) now warn.
+  - `getTagMatrix(type = "body")` warns when regions with peaks are left out because they are
+    not longer than the number of bins (most Alu elements with `nbin = 800`), with the number and
+    fraction, and when rows have an empty body (flanks in bp); recorded in
+    `annoChecks(<tag matrix>)$short_regions`. Which regions are left out is unchanged. Flanks
+    given in bp with a fractional number of bins (`nbin * 0.15`, e.g. `nbin = 50`) were columns
+    of zeros; they get `round(nbin * 0.15)` bins.
+  - `getTagMatrix(type = "body")` no longer expands every region to one value per base: the bins
+    are summed on the run-length coverage, and regions without peaks are skipped. Same matrix
+    (identical on the human genes with 5,000-25,000 peaks); on those inputs 1.3-1.6 GB and
+    1.6-3.9 s instead of 15.7-16.3 GB and 44-91 s.
+
 + Agent skills in `inst/skills/` (`system.file("skills", package = "epiSeeker")`): `range-tf`,
   `base-methylation`, `interaction-loops` and `range-singlecell`, each a `SKILL.md` (Agent Skills
   format) with one runnable script and a worked example on the package's data. All follow one

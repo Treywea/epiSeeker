@@ -92,8 +92,8 @@ a `peakOverlapResult`, which is a data.frame with one row per target peak set:
   `qSample`, `tSample`, `qLen`, `tLen`, `N_OL`, `pvalue`, `p.adjust`, and three effect
   sizes that need no permutation: `jaccard` (shared base pairs over the base pairs of the
   union), `frac_query` (fraction of query peaks overlapping the target set) and
-  `frac_target` (fraction of target peaks overlapping the query). Strand is ignored for
-  the effect sizes. With a null distribution (`nShuffle > 0`) also `expected`, the mean
+  `frac_target` (fraction of target peaks overlapping the query). Strand is ignored
+  throughout (see Details). With a null distribution (`nShuffle > 0`) also `expected`, the mean
   N_OL under the null, and `fold_enrichment` = N_OL / expected, which corrects for the
   size of each target set (and, with `background`, for where peaks can be). The p-value
   cannot rank target sets against each other: its smallest value, 1/(nShuffle+1), is
@@ -125,6 +125,14 @@ null distributions are sampled independently, which leaves small Monte-Carlo
 differences (see issue #84 of ChIPseeker). Compare `N_OL` directly if a
 direction-free measure is needed, and increase `nShuffle` to reduce the
 Monte-Carlo part.
+
+Strand is ignored by every method and every column: a peak overlaps a target region
+whatever the strand of either, as for peaks of DNA-based assays, which have none.
+Annotation sets used as targets (genes, transposable elements) usually carry `+`/`-`
+strand, and the shuffled sets of the null distribution have none, so the observed
+overlap is counted without strand as well (earlier versions counted it with strand and
+reported `N_OL = 0` and `p = 1` for a stranded target set). For a strand-specific
+question, split both sets by strand and call the function once per strand.
 }
 \examples{
 require(TxDb.Hsapiens.UCSC.hg38.knownGene)

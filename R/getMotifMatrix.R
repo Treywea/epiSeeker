@@ -1,6 +1,15 @@
 #' Get the information of motif in a range
 #'
-#' @param region region object in granges.
+#' Every region is scanned separately and the hits are placed at the genomic coordinates of
+#' the region they were found in (column `region`, the index of the region in `region`).
+#' Regions on the `-` strand are scanned on that strand (the sequence `getSeq()` returns), and
+#' their hits are mapped back to genomic coordinates, with the strand of the hit flipped.
+#' `attr(, "range")` is the start and end of the region for one region, and the span of all
+#' regions when they lie on one chromosome (`NA` otherwise); `attr(, "regions")` keeps the
+#' regions. Earlier versions recycled the region starts over the rows of the hits, which put
+#' the hits of several regions at wrong coordinates.
+#'
+#' @param region region object in granges (one or more regions).
 #' @param pwm PFMatrixList.
 #' @param ref_obj seq reference object. e.g. BSgenome object.
 #' @param by show the motif by name or ID.
@@ -32,14 +41,18 @@ getMotifMatrix <- function(region,
 
     by <- match.arg(by, c("name", "ID"))
 
-    # get start and end position
+    region <- GenomicRanges::granges(region)
+    n_reg <- length(region)
+    if (n_reg == 0) stop("`region` contains no region.")
     start_pos <- start(region)
     end_pos <- end(region)
     chr_name <- as.character(seqnames(region))
+    minus <- as.character(GenomicRanges::strand(region)) == "-"
 
     # get seq base
     if (requireNamespace("BSgenome", quietly = TRUE)) {
         regionSeqs <- BSgenome::getSeq(ref_obj, region)
+        names(regionSeqs) <- paste0("region", seq_len(n_reg))
     }
 
     # get motif position
@@ -47,9 +60,18 @@ getMotifMatrix <- function(region,
         motif_df <- as.data.frame(universalmotif::scan_sequences(pwm, regionSeqs, respect.strand = TRUE))
     }
 
+    ## the region every hit was found in; offsets are relative to that region's sequence
+    ri <- if (!is.null(motif_df$sequence.i)) as.integer(motif_df$sequence.i) else
+        match(as.character(motif_df$sequence), names(regionSeqs))
     motif_df$len <- motif_df$stop - motif_df$start
-    motif_df$start <- motif_df$start + start_pos - 1
-    motif_df$stop <- motif_df$stop + start_pos - 1
+    to_genome <- function(p) ifelse(minus[ri], end_pos[ri] - p + 1, start_pos[ri] + p - 1)
+    motif_df$start <- to_genome(motif_df$start)
+    motif_df$stop <- to_genome(motif_df$stop)
+    motif_df$strand <- as.character(motif_df$strand)
+    flip <- minus[ri] & motif_df$strand %in% c("+", "-")
+    motif_df$strand[flip] <- ifelse(motif_df$strand[flip] == "+", "-", "+")
+    motif_df$chr <- chr_name[ri]
+    motif_df$region <- ri
 
     if (by == "name") {
         motif_df$index <- motif_df$motif
@@ -68,12 +90,13 @@ getMotifMatrix <- function(region,
         coords <- seq.int(s, e)
 
         df <- data.frame(
-            chr        = chr_name,
+            chr        = motif_df$chr[i],
             coordinate = coords,
             score      = sc,
             strand     = st,
             motif      = mt,
-            seg_id     = seg_id
+            seg_id     = seg_id,
+            region     = motif_df$region[i]
         )
         if (st == "-") {
             df$score <- -df$score
@@ -89,7 +112,9 @@ getMotifMatrix <- function(region,
         result <- yulab.utils::rbindlist(motif_list)
     }
 
-    attr(result, "range") <- c(start_pos, end_pos)
+    attr(result, "range") <- if (n_reg == 1) c(start_pos, end_pos) else
+        if (length(unique(chr_name)) == 1) c(min(start_pos), max(end_pos)) else c(NA_integer_, NA_integer_)
+    attr(result, "regions") <- region
 
     return(result)
 }

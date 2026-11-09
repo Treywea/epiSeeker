@@ -31,6 +31,14 @@
 plotMotifProf <- function(df, legend_lab = "motif", y_lab = "motif score",
                           x_lab = NULL, interactive = FALSE, width_svg = 10, height_svg = 6) {
     range_x <- attr(df, "range")
+    if (!is.null(df$region) && length(unique(df$chr)) > 1) {
+        stop("`df` holds motif hits of regions on several chromosomes, which cannot share one axis; ",
+             "plot one region at a time, e.g. plotMotifProf(getMotifMatrix(region[1], pwm, ref_obj)).")
+    }
+    if (!is.null(df$region) && length(unique(df$region)) > 1) {
+        message("`df` holds motif hits of ", length(unique(df$region)), " regions; they are drawn on one axis ",
+                "spanning ", range_x[1], "-", range_x[2], ".")
+    }
     x_max <- range_x[2]
     x_min <- range_x[1]
     score_max <- round(max(abs(range(df$score))))
