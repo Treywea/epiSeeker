@@ -1,5 +1,16 @@
 # epiSeeker 1.1.4
 
++ `seqAssayQC(x, assay)` checks, without a model, whether an annotated peak set looks like the
+  assay it is said to be: its promoter fraction (within 1 kb of a TSS), median width and
+  gene-body fraction against the ranges of ENCODE peak sets of that assay (TF ChIP-seq, eight
+  histone marks, ATAC-seq, DNase-seq; `inst/extdata/assayQC_ranges.tsv`, from the training half
+  of 220 ENCODE GRCh38 files; on the other half 3.6% false flags, 59% of narrow/broad swaps
+  detected, none of the broad marks declared as TF). Flags come with reasons, e.g. a
+  declared H3K4me3 set with 10% of its peaks at promoters. `annotateSeq(assay = )` runs it,
+  warns and keeps the result in `annoChecks()$assay`; `interpret()` puts it in the evidence
+  digest, records it in the provenance and does not let the model call a flagged set consistent
+  with its assay (2026-11-09).
+
 + Agent skills in `inst/skills/` (`system.file("skills", package = "epiSeeker")`): `range-tf`,
   `base-methylation`, `interaction-loops` and `range-singlecell`, each a `SKILL.md` (Agent Skills
   format) with one runnable script and a worked example on the package's data. All follow one

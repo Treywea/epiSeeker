@@ -291,6 +291,9 @@ setMethod(
         } else if (isFALSE(chk$build$reliable)) {
             cat("Check: with", chk$build$n_peaks, "peaks the genome-build check is unreliable (see annoChecks())\n")
         }
+        if (isFALSE(chk$assay$consistent)) {
+            cat("Check: the peaks do not look like the declared assay,", chk$assay$assay, "(see annoChecks()$assay)\n")
+        }
         if (object@hasGenomicAnnotation) {
             cat("Genomic Annotation Summary:\n")
             print(object@annoStat)

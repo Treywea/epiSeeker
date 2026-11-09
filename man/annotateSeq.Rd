@@ -21,7 +21,8 @@ annotateSeq(
   ignoreDownstream = FALSE,
   overlap = "TSS",
   verbose = TRUE,
-  columns = c("ENTREZID", "ENSEMBL", "SYMBOL", "GENENAME")
+  columns = c("ENTREZID", "ENSEMBL", "SYMBOL", "GENENAME"),
+  assay = NULL
 )
 }
 \arguments{
@@ -60,6 +61,10 @@ distance to the feature TSS otherwise.}
 \item{verbose}{print message or not}
 
 \item{columns}{names of columns to be obtained from database}
+
+\item{assay}{optional declared assay of the peaks, e.g. "H3K4me3", "TF", "ATAC". When given,
+[seqAssayQC()] compares the annotated peaks with ENCODE peak sets of that assay, warns
+when they do not look like it, and keeps the result in `annoChecks(<result>)$assay`.}
 }
 \value{
 data.frame or GRanges object with columns of:

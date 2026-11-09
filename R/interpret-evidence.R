@@ -29,8 +29,9 @@
     gene <- .region_gene(df)
     feature <- .short_annotation(df$annotation)
 
+    qc <- .assay_qc_for(x, assay)
     sections <- list()
-    sections$overview <- .digest_overview(x, n, context, assay, question)
+    sections$overview <- .digest_overview(x, n, context, assay, question, qc)
     sections$top_regions <- .digest_regions(df, gene, feature, ord$column, n_regions)
     genes <- .digest_genes(gene, feature, max_genes, n_distal_genes)
     sections$genes <- genes$text
@@ -55,7 +56,8 @@
             overlap = if (is.null(ov)) NULL else ov$table,
             annoStat = x@annoStat
         ),
-        totals = list(n_regions = n, n_regions_sent = min(n, n_regions), rank_by = ord$column)
+        totals = list(n_regions = n, n_regions_sent = min(n, n_regions), rank_by = ord$column),
+        assay_qc = qc
     ), class = "seq_digest")
 }
 
@@ -88,7 +90,16 @@
     a
 }
 
-.digest_overview <- function(x, n, context, assay, question) {
+## seqAssayQC() for the declared assay: the result annotateSeq(assay = ) kept when it was for the
+## same assay, otherwise computed now; NULL without an assay
+.assay_qc_for <- function(x, assay) {
+    if (is.null(assay) || length(assay) != 1 || is.na(assay) || !nzchar(trimws(assay))) return(NULL)
+    kept <- annoChecks(x)$assay
+    if (!is.null(kept) && identical(kept$assay, as.character(assay))) return(kept)
+    seqAssayQC(x, assay)
+}
+
+.digest_overview <- function(x, n, context, assay, question, qc = NULL) {
     paste0(
         "## Overview\n",
         "Regions: ", n, " (annotated at ", x@level, " level, TSS region ",
@@ -97,6 +108,7 @@
         .group_line(list(x)),
         .checks_line(x),
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
+        if (!is.null(qc)) paste0(.assayqc_line(qc), "\n"),
         "Context: ", if (is.null(context)) "not given" else context, "\n",
         "Question: ", if (is.null(question)) "none" else question
     )
@@ -303,6 +315,10 @@
         paste(vapply(grp, function(g) .checks_line(x[[g]], prefix = paste0("Checks (", g, "): ")), ""),
               collapse = ""),
         "Declared assay: ", if (is.null(assay)) "not given" else assay, "\n",
+        paste(vapply(grp, function(g) {
+            qc <- .assay_qc_for(x[[g]], assay)
+            if (is.null(qc)) "" else paste0("(", g, ") ", .assayqc_line(qc), "\n")
+        }, ""), collapse = ""),
         "Context: ", if (is.null(context)) "not given" else context, "\n",
         "Question: ", if (is.null(question)) "none" else question
     )

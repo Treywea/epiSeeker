@@ -1,0 +1,38 @@
+# seqAssayQC() ranges: 109 training peak sets of a stratified sample of ENCODE GRCh38 files (CC BY 4.0), 2026-11-09
+# per class: [min - m*sd, max + m*sd] of the training files on the logit (fractions) or log10 (width) scale
+# m = 2, chosen by leave-one-file-out (training false-flag rate <= 5%); annotateSeq() with hg38 knownGene, tssRegion +-3 kb
+# derivation and held-out evaluation: epiSeeker-LLM checks/20261109_seqassayqc
+class	feature	n_train	lower	upper	train_min	train_max
+ATAC	promoter_1kb	8	0.1299	0.9687	0.4076	0.8704
+ATAC	width_median	8	626.7	1065	726	919.5
+ATAC	gene_body	8	0.022	0.7263	0.0809	0.4041
+DNase	promoter_1kb	8	0.1375	0.4292	0.2033	0.3196
+DNase	width_median	8	122.2	245.5	150	200
+DNase	gene_body	8	0.3441	0.5877	0.4114	0.5169
+H3K27ac	promoter_1kb	8	0.1407	0.6841	0.2599	0.5025
+H3K27ac	width_median	8	264.3	4387	585	1982
+H3K27ac	gene_body	8	0.2227	0.6821	0.3374	0.547
+H3K27me3	promoter_1kb	8	0.05154	0.7519	0.1354	0.5127
+H3K27me3	width_median	8	44.63	5105	168	1356
+H3K27me3	gene_body	8	0.1658	0.6312	0.2629	0.4882
+H3K36me3	promoter_1kb	8	0.1392	0.3768	0.1908	0.293
+H3K36me3	width_median	8	58.24	3577	177	1177
+H3K36me3	gene_body	8	0.4041	0.7053	0.4923	0.626
+H3K4me1	promoter_1kb	8	0.09376	0.5516	0.1782	0.3699
+H3K4me1	width_median	8	73.03	3287	241	996
+H3K4me1	gene_body	8	0.3359	0.6509	0.432	0.5536
+H3K4me3	promoter_1kb	8	0.2254	0.9217	0.4733	0.7922
+H3K4me3	width_median	8	527.5	2684	817	1733
+H3K4me3	gene_body	8	0.04067	0.5998	0.1143	0.33
+H3K79me2	promoter_1kb	8	0.08287	0.6474	0.1686	0.45
+H3K79me2	width_median	8	86.74	2833	248	991
+H3K79me2	gene_body	8	0.2417	0.7864	0.3904	0.6469
+H3K9ac	promoter_1kb	8	0.3712	0.7436	0.486	0.6442
+H3K9ac	width_median	8	260.2	1560	450	902
+H3K9ac	gene_body	8	0.1511	0.4294	0.2145	0.329
+H3K9me3	promoter_1kb	8	0.01501	0.09907	0.02593	0.0592
+H3K9me3	width_median	8	168.7	1870	341	925
+H3K9me3	gene_body	8	0.4789	0.6933	0.5424	0.6367
+TF	promoter_1kb	29	0.004865	0.9836	0.05698	0.8289
+TF	width_median	29	145.5	1302	256	740
+TF	gene_body	29	0.01692	0.9051	0.08796	0.6298
