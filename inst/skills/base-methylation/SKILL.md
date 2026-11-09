@@ -35,8 +35,13 @@ and present it as an epiSeeker result.
 - A locus in sequence context: `getBmMatrix(region = data.frame(chr, start, end), input = bm,
   BSgenome =, base = "C", motif = "CG")`, then `plotBmProf()`.
 - Per read (single-molecule data only): `plotModReads(reads, region, types = "5mC")`;
-  `modReadMatrix(reads, regions, type =)`; `modCooccurrence(reads, region1, region2, type =)`
-  for whether two regions are modified on the same molecules (needs reads spanning both).
+  `modReadMatrix(reads, regions, type =)`; `modCooccurrence(reads, region1, region2, type =,
+  adjust = "read")` for whether two regions are modified on the same molecules (needs reads
+  spanning both). Report the adjusted result: molecules differ in overall openness / labelling,
+  which makes unrelated regions look co-modified in the unadjusted test.
+- DMRs from DSS, methylKit or dmrseq are intervals: `readDMR(file)` gives a GRanges with
+  `effect`, `direction`, `pvalue`, `qvalue`; annotate it with `annotateSeq()`, split by
+  `direction` for hyper / hypo genes.
 
 ## 3. Correctness checks
 - `annoChecks()` of the cluster annotation (build, dropped clusters). With fewer than 200 clusters
@@ -65,7 +70,8 @@ objects.rds; the simulated input of the per-read example).
 - "significant(ly) different" without a test on replicates; the digest's differences are
   descriptive (it counts sites with |difference| >= 0.2).
 - Anything about co-occurrence on molecules from bulk levels; only per-read data can show it.
-- A DMR call; the package does not make them yet.
+- A DMR call made from these levels; the package does not call DMRs (it reads them with `readDMR()`).
+- "Co-open / co-modified on the same molecules" from the unadjusted `modCooccurrence()` test alone.
 
 ## Run it
 ```sh

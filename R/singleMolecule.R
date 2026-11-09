@@ -363,26 +363,145 @@ modReadMatrix <- function(x, regions, type = "msp", fire_only = FALSE) {
 #' Fisher's exact test. A positive association means the two regions tend to open together on
 #' the same molecule, which a bulk profile cannot show.
 #'
+#' Molecules differ in how much of them is open or labelled at all (e.g. uneven m6A labelling
+#' in Fiber-seq): a read with many MSPs everywhere is more likely to be open at both regions,
+#' which makes unrelated regions look co-open. On real COLO829BL Fiber-seq, 7 of 44 pairs of
+#' FIRE elements were positive by the unadjusted test and 23% of distance-matched non-FIRE
+#' pairs as well. `adjust = "read"` tests the association given each read's overall openness
+#' (its fraction covered by `type`, or for a base-level type its modified fraction or
+#' modifications per kb): by logistic regression of region 2 on region 1 and the covariate
+#' (`method = "logistic"`), or by a Cochran-Mantel-Haenszel test stratified by quantiles of the
+#' covariate (`method = "cmh"`). By default the covariate leaves out the two regions
+#' (`covariate = "outside"`), so it does not contain the outcome; `"all"` uses the whole read;
+#' a numeric vector named by read id gives any other per-read covariate. The unadjusted table,
+#' odds ratio and p-value are always returned; the default stays `adjust = "none"`, so results
+#' made before the option are unchanged -- use `adjust = "read"` before calling regions
+#' co-open.
+#'
 #' @param x per-read calls from [readModCalls()].
 #' @param region1,region2 `GRanges` of length one.
 #' @param type,fire_only passed to [modReadMatrix()].
 #' @param cutoff value at or above which a region counts as open on a read.
+#' @param adjust `"none"` or `"read"` (adjust for each read's overall openness).
+#' @param method with `adjust = "read"`: `"logistic"` or `"cmh"`.
+#' @param covariate with `adjust = "read"`: `"outside"` (the read outside the two regions),
+#'   `"all"` (the whole read), or a numeric vector named by read id.
+#' @param strata number of quantile strata of the covariate for `method = "cmh"`.
 #' @return a list with `table`, `n_reads`, `odds_ratio` and `p_value` (`NA` when fewer than 2
-#'   reads span both regions or a margin is empty).
+#'   reads span both regions or a margin is empty), and `adjust`; with `adjust = "read"` also
+#'   `adj_odds_ratio` and `adj_p_value` (conditional on the covariate), `adjust_method` and
+#'   `covariate` (how it was made, and its median and IQR over the reads tested).
 #' @export
-modCooccurrence <- function(x, region1, region2, type = "msp", fire_only = FALSE, cutoff = 0.5) {
+modCooccurrence <- function(x, region1, region2, type = "msp", fire_only = FALSE, cutoff = 0.5,
+                            adjust = c("none", "read"), method = c("logistic", "cmh"),
+                            covariate = "outside", strata = 4) {
+    adjust <- match.arg(adjust)
+    method <- match.arg(method)
+    x <- x[x$type == type]  # once, for both the matrix and the covariate (metadata is kept)
     m <- modReadMatrix(x, c(region1, region2), type = type, fire_only = fire_only)
     ok <- stats::complete.cases(m)
     a <- factor(m[ok, 1] >= cutoff, levels = c(TRUE, FALSE), labels = c("open", "closed"))
     b <- factor(m[ok, 2] >= cutoff, levels = c(TRUE, FALSE), labels = c("open", "closed"))
     tab <- table(region1 = a, region2 = b)
-    res <- list(table = tab, n_reads = sum(ok), odds_ratio = NA_real_, p_value = NA_real_)
-    if (sum(ok) >= 2 && all(rowSums(tab) > 0) && all(colSums(tab) > 0)) {
+    res <- list(table = tab, n_reads = sum(ok), odds_ratio = NA_real_, p_value = NA_real_, adjust = adjust)
+    testable <- sum(ok) >= 2 && all(rowSums(tab) > 0) && all(colSums(tab) > 0)
+    if (testable) {
         ft <- stats::fisher.test(tab)
         res$odds_ratio <- unname(ft$estimate)
         res$p_value <- ft$p.value
     }
+    if (adjust == "none") return(res)
+
+    if (is.numeric(covariate)) {
+        if (is.null(names(covariate))) stop("a numeric `covariate` must be named by read id.")
+        cv <- unname(covariate[rownames(m)[ok]])
+        cv_desc <- "given by the user"
+    } else {
+        covariate <- match.arg(covariate, c("outside", "all"))
+        exclude <- if (covariate == "outside") c(region1, region2) else NULL
+        cv <- .sm_read_openness(x, type, fire_only, exclude)[rownames(m)[ok]]
+        cv_desc <- paste0(if (.sm_is_interval(type)) "fraction of the read covered by " else
+            "per-read level of ", type, if (fire_only) " (FIREs only)", ", ",
+            if (covariate == "outside") "outside the two regions" else "whole read")
+    }
+    res$adjust_method <- method
+    res$covariate <- list(how = cv_desc, median = stats::median(cv, na.rm = TRUE),
+                          IQR = stats::quantile(cv, c(0.25, 0.75), na.rm = TRUE, names = FALSE))
+    res$adj_odds_ratio <- NA_real_
+    res$adj_p_value <- NA_real_
+    o1 <- a == "open"
+    o2 <- b == "open"
+    use <- !is.na(cv)
+    if (!testable || sum(use) < 3) return(res)
+    if (method == "logistic") {
+        f <- suppressWarnings(stats::glm(o2[use] ~ o1[use] + cv[use], family = stats::binomial()))
+        cf <- summary(f)$coefficients
+        if ("o1[use]TRUE" %in% rownames(cf)) {
+            res$adj_odds_ratio <- exp(cf["o1[use]TRUE", 1])
+            res$adj_p_value <- cf["o1[use]TRUE", 4]
+        }
+    } else {
+        br <- unique(stats::quantile(cv[use], seq(0, 1, length.out = strata + 1), names = FALSE))
+        st <- if (length(br) > 1) cut(cv[use], br, include.lowest = TRUE) else factor(rep(1, sum(use)))
+        t3 <- table(factor(o1[use], c(TRUE, FALSE)), factor(o2[use], c(TRUE, FALSE)), st)
+        t3 <- t3[, , apply(t3, 3, sum) > 1, drop = FALSE]
+        if (dim(t3)[3] >= 1) {
+            mh <- tryCatch(stats::mantelhaen.test(t3), error = function(e) NULL)
+            if (!is.null(mh)) {
+                res$adj_odds_ratio <- unname(mh$estimate)
+                res$adj_p_value <- mh$p.value
+            }
+        }
+    }
     res
+}
+
+.sm_is_interval <- function(type) type %in% .sm_interval_types
+
+## Overall openness of every read: for an interval type the fraction of the read covered by it,
+## for a base-level type the modified fraction (tables listing unmodified calls) or modifications
+## per kb. `exclude` (GRanges) is left out of both numerator and denominator. When the calls
+## were read for a region only, the read is clipped to that region.
+.sm_read_openness <- function(x, type, fire_only = FALSE, exclude = NULL) {
+    reads <- metadata(x)$reads
+    ids <- reads$read_id
+    ## each read as its own sequence, so overlaps are only ever within a read
+    per_read <- function(g) {
+        g <- GenomicRanges::granges(g)
+        k <- which(as.character(GenomicRanges::seqnames(g))[rep(seq_along(g), each = length(ids))] ==
+                       rep(reads$chr, length(g)))
+        gi <- (k - 1) %/% length(ids) + 1
+        ri <- (k - 1) %% length(ids) + 1
+        GRanges(ids[ri], IRanges(GenomicRanges::start(g)[gi], GenomicRanges::end(g)[gi]))
+    }
+    rr <- GRanges(ids, IRanges(reads$start, reads$end))
+    reg <- metadata(x)$modSource$region
+    if (!is.null(reg)) rr <- GenomicRanges::intersect(rr, per_read(GRanges(reg)), ignore.strand = TRUE)
+    if (!is.null(exclude)) rr <- GenomicRanges::setdiff(rr, per_read(exclude), ignore.strand = TRUE)
+    sp <- tapply(GenomicRanges::width(rr), factor(as.character(GenomicRanges::seqnames(rr)), levels = ids), sum)
+    out <- stats::setNames(as.numeric(sp), ids)
+    has_span <- !is.na(out) & out > 0
+    y <- x[x$type == type]
+    if (type == "msp" && fire_only) y <- y[!is.na(y$modified) & y$modified]
+    yr <- GRanges(y$read_id, IRanges(GenomicRanges::start(y), GenomicRanges::end(y)))
+    rf <- function(v) factor(v, levels = ids)
+    if (.sm_is_interval(type)) {
+        iv <- GenomicRanges::intersect(GenomicRanges::reduce(yr), rr, ignore.strand = TRUE)
+        num <- tapply(GenomicRanges::width(iv), rf(as.character(GenomicRanges::seqnames(iv))), sum)
+        num[is.na(num)] <- 0
+        val <- as.numeric(num) / out
+    } else {
+        inside <- overlapsAny(yr, rr, ignore.strand = TRUE)
+        if (.sm_lists_negatives(y)) {
+            val <- as.numeric(tapply(y$modified[inside], rf(y$read_id[inside]), mean))
+        } else {
+            num <- tapply(y$modified[inside], rf(y$read_id[inside]), sum)
+            num[is.na(num)] <- 0
+            val <- 1000 * as.numeric(num) / out
+        }
+    }
+    val[!has_span] <- NA_real_
+    stats::setNames(val, ids)
 }
 
 #' Plot reads over a region

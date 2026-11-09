@@ -166,9 +166,12 @@ if (!is.null(a$region)) {
         mid <- GenomicRanges::start(rg) + GenomicRanges::width(rg) %/% 2
         h1 <- GenomicRanges::GRanges(GenomicRanges::seqnames(rg), IRanges::IRanges(GenomicRanges::start(rg), mid))
         h2 <- GenomicRanges::GRanges(GenomicRanges::seqnames(rg), IRanges::IRanges(mid + 1, GenomicRanges::end(rg)))
-        co <- modCooccurrence(reads, h1, h2, type = a$type)
+        ## adjusted for each read's overall level outside the two halves: per-read differences
+        ## (labelling, openness) otherwise make unrelated regions look co-modified
+        co <- modCooccurrence(reads, h1, h2, type = a$type, adjust = "read")
         skill_table(data.frame(region1 = as.character(h1), region2 = as.character(h2), n_reads = co$n_reads,
-                               odds_ratio = co$odds_ratio, p_value = co$p_value), "cooccurrence.tsv")
+                               odds_ratio = co$odds_ratio, p_value = co$p_value,
+                               adj_odds_ratio = co$adj_odds_ratio, adj_p_value = co$adj_p_value), "cooccurrence.tsv")
         skill_check("correctness", "reads span both halves for the co-occurrence test",
                     if (is.na(co$p_value)) "NOTE" else "PASS",
                     paste0(co$n_reads, " reads span both",

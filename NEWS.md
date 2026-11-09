@@ -1,5 +1,18 @@
 # epiSeeker 1.1.4
 
++ `readDMR()` reads the DMR tables of DSS (`callDMR()`), methylKit (`getMethylDiff()`, bases or
+  tiles; object, `getData()` table or written file) and dmrseq into a `GRanges` with the same
+  columns whatever the caller (`effect`, `direction` hyper / hypo, `pvalue`, `qvalue`, `n_CpG`,
+  `caller`) and the provenance in `metadata()$dmrSource`, ready for `annotateSeq()`. The
+  `interpret()` digest of DMRs states the caller, the effect and the hyper / hypo counts, and ranks
+  DMRs by the absolute effect (2026-11-09).
+
++ `modCooccurrence(adjust = "read")` tests whether two regions open on the same molecules given
+  each read's overall openness (logistic regression, or `method = "cmh"` stratified by its
+  quantiles; covariate outside the two regions by default). Per-read differences in labelling
+  made 7 of 44 FIRE-element pairs and 23% of distance-matched control pairs look co-open on
+  COLO829BL Fiber-seq; adjusted, 1 of 44. The default stays `adjust = "none"` (2026-11-09).
+
 + Agent skills in `inst/skills/` (`system.file("skills", package = "epiSeeker")`): `range-tf`,
   `base-methylation`, `interaction-loops` and `range-singlecell`, each a `SKILL.md` (Agent Skills
   format) with one runnable script and a worked example on the package's data. All follow one
