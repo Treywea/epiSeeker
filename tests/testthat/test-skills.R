@@ -119,3 +119,46 @@ test_that("base-singlemolecule adjusts co-occurrence with modCooccurrence(adjust
     md <- paste(readLines(file.path(skills_dir, "base-singlemolecule", "SKILL.md"), warn = FALSE), collapse = " ")
     expect_match(md, "distance-matched control pairs", fixed = TRUE)
 })
+
+test_that("range-tf, range-histone and range-atac run seqAssayQC() as an input check", {
+    for (s in c("range-tf", "range-histone", "range-atac")) {
+        f <- list.files(file.path(skills_dir, s, "scripts"), pattern = "\\.R$", full.names = TRUE)
+        calls <- tokens(f)$text[tokens(f)$token == "SYMBOL_FUNCTION_CALL"]
+        expect_true(all(c("range_assay_qc", "range_keep_assay_qc", "range_assay_section") %in% calls), info = s)
+        md <- paste(readLines(file.path(skills_dir, s, "SKILL.md"), warn = FALSE), collapse = " ")
+        expect_match(md, "seqAssayQC(", fixed = TRUE)
+        expect_match(md, "The check is partial", fixed = TRUE)
+        expect_match(md, "59%", fixed = TRUE)
+    }
+})
+
+test_that("range_assay_qc() reports a flag as WARN and no flag as a NOTE that does not verify the assay", {
+    skip_if_not_installed("TxDb.Hsapiens.UCSC.hg38.knownGene")
+    txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene::TxDb.Hsapiens.UCSC.hg38.knownGene
+    env <- new.env()
+    sys.source(file.path(skills_dir, "shared", "skill-helpers.R"), envir = env)
+    sys.source(file.path(skills_dir, "shared", "range-steps.R"), envir = env)
+    out <- tempfile("assayqc")
+    on.exit(unlink(out, recursive = TRUE))
+    suppressMessages(env$skill_start("test", list(), out))
+    ## 600 domains of 20 kb declared as TF: flagged (median width); the ENCODE H3K27me3 example
+    ## declared as TF: a broad mark the check cannot tell from a TF, so no flag
+    dom <- GenomicRanges::GRanges("chr1", IRanges::IRanges(seq(1e6, by = 2e5, length.out = 600), width = 20000))
+    k27 <- readPeakFile(system.file("extdata", "encode", "prostate_H3K27me3_ENCFF198QRW_chr1-2.bed.gz", package = "epiSeeker"))
+    qc <- suppressMessages(env$range_assay_qc(list(domains = dom, k27 = k27), txdb, "TF"))
+    expect_false(qc$domains$consistent)
+    expect_true(qc$k27$consistent)
+    ck <- env$.skill$checks
+    expect_equal(ck$status[ck$check == "assay label of domains (seqAssayQC)"], "WARN")
+    expect_match(ck$detail[ck$check == "assay label of domains (seqAssayQC)"], "does not look like TF: median width")
+    expect_equal(ck$status[ck$check == "assay label of k27 (seqAssayQC)"], "NOTE")
+    expect_match(ck$detail[ck$check == "assay label of k27 (seqAssayQC)"], "no flag does not verify the assay", fixed = TRUE)
+    expect_false(any(ck$status == "PASS" & grepl("seqAssayQC", ck$check)))
+    tab <- utils::read.delim(file.path(out, "tables", "assay_qc.tsv"))
+    expect_equal(tab$flagged, c(TRUE, FALSE))
+    ## kept with the annotation interpret() reads; no --assay: a NOTE, nothing checked
+    an <- env$range_keep_assay_qc(list(k27 = suppressWarnings(annotateSeq(k27, TxDb = txdb, verbose = FALSE))), qc)
+    expect_identical(annoChecks(an$k27)$assay, qc$k27)
+    expect_null(suppressMessages(env$range_assay_qc(list(k27 = k27), txdb, NULL)))
+    expect_match(paste(env$range_assay_section(qc), collapse = " "), "no flag does not verify the assay", fixed = TRUE)
+})

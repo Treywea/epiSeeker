@@ -43,6 +43,9 @@ for (s in nm) {
                     paste0("; as narrow as TF peaks (20 ENCODE TF sets: 184-556 bp): narrow-mode caller? ",
                            "domains are built by merging peaks within ", gap, " bp") else ""))
 }
+## the declared mark against ENCODE peak sets of that mark (seqAssayQC on the peaks, before they
+## are merged; partial)
+qc <- range_assay_qc(inp$peaks, inp$txdb, a$assay)
 
 ## ---- 2. domains and their summaries ---------------------------------------------------------
 dom <- lapply(inp$peaks, function(p) GenomicRanges::reduce(GenomicRanges::granges(p), min.gapwidth = gap + 1L,
@@ -62,6 +65,7 @@ skill_check("analysis", "peaks merged into domains", "PASS",
 
 ## annotation of the domains (correctness checks inside), genes under domains
 anno <- range_annotate(dom, inp$txdb, a$annodb, tss, allow_suspect = a$allow_suspect, what = "domains of ")
+anno <- range_keep_assay_qc(anno, qc)   # interpret() reports the peaks' check, not one of the domains
 genes <- lapply(nm, function(s) skill_capture(seq2gene(dom[[s]], tssRegion = c(-tss, tss), flankDistance = 0,
                                                        TxDb = inp$txdb), paste("seq2gene", s)))
 names(genes) <- nm
@@ -83,6 +87,7 @@ ov <- range_overlap(dom[[1]], a, inp$txdb)
 prom <- range_promoter_pct(anno)
 sec <- list(
     "Input" = range_input_section(inp, anno, a),
+    "Assay label" = range_assay_section(qc),
     "Domains" = c(paste0("- ", dsum$set, ": ", dsum$peaks, " peaks merged within ", gap, " bp into ", dsum$domains,
                          " domains; width median ", dsum$domain_width_median, " bp (IQR ", dsum$domain_width_q1, "-",
                          dsum$domain_width_q3, ", max ", dsum$domain_width_max, "), ", dsum$domains_over_10kb,
@@ -101,10 +106,11 @@ ctx <- paste(c(if (!is.null(a$context)) sub("([^.])$", "\\1.", a$context),
                paste0("Regions are broad domains merged from peaks within ", gap, " bp, not binding sites.")), collapse = " ")
 res <- skill_interpret(anno[[1]], model = a$model, context = ctx, assay = a$assay, question = a$question, overlap = ov)
 skill_flag_phrases(res, c(
+    "assay label called verified" = "\\b(assay|label)\\b[^.]{0,60}\\b(verified|confirmed|validated)\\b",
     "TF-style claim from a broad mark" = "\\b(motifs?|binding sites?|binds?|bound by)\\b",
     "causal claim from a mark" = "\\b(regulates|silences|represses|activates|drives|controls)\\b",
     "nearest gene called the target" = "\\btarget genes?\\b|\\bis the target\\b"))
 skill_report("range-histone report", sec)
-saveRDS(list(domains = dom, anno = anno, genes = genes, overlap = ov), skill_path("provenance", "objects.rds"))
+saveRDS(list(domains = dom, anno = anno, genes = genes, overlap = ov, assay_qc = qc), skill_path("provenance", "objects.rds"))
 skill_finish()
 message("range-histone done: ", skill_path("report", "report.md"))

@@ -44,9 +44,13 @@ for (s in nm) {
                 paste0("median ", w, " bp (20 ENCODE TF sets: 184-556 bp)",
                        if (w > 556) "; wider than any of them: broad mark? use range-histone" else ""))
 }
+## the declared assay against ENCODE peak sets (seqAssayQC; partial: it cannot tell a broad mark
+## declared as TF, which the width check above can sometimes)
+qc <- range_assay_qc(inp$peaks, inp$txdb, a$assay)
 
 ## ---- 2. analysis with epiSeeker functions (correctness checks of each annotation inside) ----
 anno <- range_annotate(inp$peaks, inp$txdb, a$annodb, tss, allow_suspect = a$allow_suspect)
+anno <- range_keep_assay_qc(anno, qc)
 range_profile(inp$peaks, inp$txdb, tss, tss, "tss_profile.pdf")
 ov <- range_overlap(inp$peaks[[1]], a, inp$txdb)
 
@@ -54,6 +58,7 @@ ov <- range_overlap(inp$peaks[[1]], a, inp$txdb)
 prom <- range_promoter_pct(anno)
 sec <- list(
     "Input" = range_input_section(inp, anno, a),
+    "Assay label" = range_assay_section(qc),
     "Annotation" = c(paste0("- ", nm, ": ", sprintf("%.1f", prom), "% in promoters (+/-", tss, " bp)"),
                      "- tables/annotation_stat.tsv, figures/annotation_bar.pdf, distance_to_tss.pdf, tss_profile.pdf"),
     "Overlap" = range_overlap_section(ov)
@@ -63,10 +68,11 @@ sec <- list(
 res <- skill_interpret(anno[[1]], model = a$model, context = a$context, assay = a$assay,
                        question = a$question, overlap = ov)
 skill_flag_phrases(res, c(
+    "assay label called verified" = "\\b(assay|label)\\b[^.]{0,60}\\b(verified|confirmed|validated)\\b",
     "causal claim from binding" = "\\b(regulates|activates|represses|drives|controls)\\b",
     "nearest gene called the target" = "\\btarget genes?\\b|\\bis the target\\b",
     "overlap as identity proof" = "\\b(proves?|confirms?|demonstrates?)\\b"))
 skill_report("range-tf report", sec)
-saveRDS(list(anno = anno, overlap = ov), skill_path("provenance", "objects.rds"))
+saveRDS(list(anno = anno, overlap = ov, assay_qc = qc), skill_path("provenance", "objects.rds"))
 skill_finish()
 message("range-tf done: ", skill_path("report", "report.md"))

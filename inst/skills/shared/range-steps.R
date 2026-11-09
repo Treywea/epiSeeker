@@ -51,6 +51,83 @@ range_annotate <- function(regions, txdb, annodb, tss, allow_suspect = FALSE, wh
     anno
 }
 
+## ---- assay label check (seqAssayQC) ------------------------------------------------------------
+
+## seqAssayQC() of every peak set against ENCODE peak sets of the declared --assay: a flag (WARN)
+## when the promoter fraction, median width or gene-body fraction is outside the range of that
+## assay. The check is partial: on held-out ENCODE files it flagged 3.6% of correctly labelled
+## sets and 59% of narrow <-> broad swaps, and no broad mark declared as "TF". So no flag is a
+## NOTE ("not contradicted"), never a PASS: it does not verify the assay. The ranges come from
+## peak files annotated with annotateSeq()'s defaults, so the peaks are annotated that way for the
+## check, whatever --tss the analysis uses (the build and dropped-peak checks are those of the
+## analysed annotation, recorded there). range_keep_assay_qc() then keeps each result in
+## annoChecks(<annotation analysed>)$assay, so that interpret(assay =) reports the same result
+## (for range-histone: the peaks', not the merged domains').
+range_assay_qc <- function(peaks, txdb, assay) {
+    nm <- names(peaks)
+    partial <- paste("partial check: on held-out ENCODE files 59% of narrow/broad swaps flagged,",
+                     "no broad mark declared as TF; no flag does not verify the assay")
+    if (is.null(assay) || isTRUE(assay) || !nzchar(trimws(assay))) {
+        skill_check("input", "assay label (seqAssayQC)", "NOTE", "no --assay given; not checked")
+        return(NULL)
+    }
+    qc <- lapply(nm, function(s) {
+        an <- suppressWarnings(annotateSeq(peaks[[s]], TxDb = txdb, verbose = FALSE))
+        seqAssayQC(an, assay)
+    })
+    names(qc) <- nm
+    for (s in nm) {
+        q <- qc[[s]]
+        met <- sprintf("promoter fraction (<= 1 kb) %.1f%%, median width %s bp, gene-body fraction %.1f%%",
+                       100 * q$metrics[["promoter_1kb"]], format(round(q$metrics[["width_median"]]), big.mark = ","),
+                       100 * q$metrics[["gene_body"]])
+        fits <- if (length(q$fits)) paste0("fits ENCODE ", paste(q$fits, collapse = ", ")) else "fits no ENCODE class"
+        if (isFALSE(q$consistent)) {
+            skill_check("input", paste("assay label of", s, "(seqAssayQC)"), "WARN",
+                        paste0("does not look like ", q$assay, ": ", paste(q$reasons, collapse = "; "), "; ", fits,
+                               ". Check the assay label of this file"))
+        } else if (isTRUE(q$consistent)) {
+            skill_check("input", paste("assay label of", s, "(seqAssayQC)"), "NOTE",
+                        paste0("not contradicted for ", q$class, " (", met, "); ", partial,
+                               if (length(q$note)) paste0("; ", paste(q$note, collapse = "; ")) else ""))
+        } else {
+            skill_check("input", paste("assay label of", s, "(seqAssayQC)"), "NOTE",
+                        paste0("not assessable: ", paste(q$reasons, collapse = "; ")))
+        }
+    }
+    tab <- do.call(rbind, lapply(nm, function(s) {
+        q <- qc[[s]]
+        data.frame(set = s, assay = q$assay, class = if (is.na(q$class)) NA else q$class,
+                   assessable = q$assessable, flagged = isFALSE(q$consistent),
+                   n_peaks = q$metrics[["n_peaks"]], promoter_1kb = round(q$metrics[["promoter_1kb"]], 4),
+                   width_median = q$metrics[["width_median"]], gene_body = round(q$metrics[["gene_body"]], 4),
+                   fits = paste(q$fits, collapse = ","), reasons = paste(q$reasons, collapse = "; "))
+    }))
+    skill_table(tab, "assay_qc.tsv")
+    qc
+}
+
+## keep the assay check with the annotation interpret() reads
+range_keep_assay_qc <- function(anno, qc) {
+    for (s in intersect(names(anno), names(qc))) S4Vectors::metadata(anno[[s]]@anno)$annoChecks$assay <- qc[[s]]
+    anno
+}
+
+## the report lines of the assay check
+range_assay_section <- function(qc) {
+    if (is.null(qc)) return("not checked (no --assay)")
+    c(vapply(names(qc), function(s) {
+        q <- qc[[s]]
+        paste0("- ", s, ": ", if (isFALSE(q$consistent)) paste0("**flagged** - does not look like ", q$assay, ": ",
+                                                               paste(q$reasons, collapse = "; ")) else
+            if (isTRUE(q$consistent)) paste0("no flag for ", q$class) else
+                paste0("not assessable (", paste(q$reasons, collapse = "; "), ")"))
+    }, ""),
+    paste("- seqAssayQC() compares promoter fraction, median width and gene-body fraction with ENCODE peak sets;",
+          "it is partial (held-out: 59% of narrow/broad swaps flagged, none of the broad marks declared as TF),",
+          "so no flag does not verify the assay. tables/assay_qc.tsv"))
+}
+
 ## % of each set within the promoter window, from getAnnoStat()
 range_promoter_pct <- function(anno) {
     vapply(names(anno), function(s) {

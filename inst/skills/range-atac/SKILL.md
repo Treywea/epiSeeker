@@ -15,6 +15,14 @@ shares with `range-tf` and `range-histone` are in `../shared/range-steps.R`.
    often carry contigs the TxDb lacks; those are reported, not an error).
 3. **Peak width.** ATAC / DNase peak calls are narrow (the LNCaP DNase example: median 180 bp); a
    median above 1 kb suggests a broad-mode caller or merged regions (NOTE).
+4. **Assay label** (`--assay`): `seqAssayQC(annotateSeq(peaks, TxDb =), assay)` compares the
+   promoter fraction (<= 1 kb), median width and gene-body fraction with ENCODE peak sets of that
+   assay (`tables/assay_qc.tsv`). A flag is a WARN with its reasons (and the ENCODE classes the
+   profile fits): check the label before going on. **The check is partial**: on held-out ENCODE
+   files it flagged 3.6% of correctly labelled sets but only 59% of narrow <-> broad swaps, and
+   none of the broad marks declared as TF. No flag is a NOTE "not contradicted", not a PASS:
+   never write that the assay was verified or confirmed. The result is kept in
+   `annoChecks(anno)$assay`, so `interpret(assay =)` reports the same one.
 
 ## 2. Analysis (epiSeeker functions only)
 - `readPeakFile()`; `annotateSeq(peaks, TxDb =, annoDb =, tssRegion = c(-3000, 3000))`;
@@ -40,11 +48,12 @@ skipped without a model. A call counts only when `clusterProfiler::provenance(re
 
 ## 5. Provenance and outputs
 `figures/` (annotation_bar, distance_to_tss, tss_profile, tss_insertions), `tables/`
-(annotation_<set>, annotation_stat, fragments_qc, overlap), `report/report.md`, `provenance/`
+(assay_qc, annotation_<set>, annotation_stat, fragments_qc, overlap), `report/report.md`, `provenance/`
 (run.txt, checks.tsv, sessionInfo.txt, interpret_provenance.txt, objects.rds; the simulated
 fragments of `--example_fragments`).
 
 ## Do not say
+- "the assay / label was verified (confirmed) by the QC": seqAssayQC() can only flag, and misses many mislabels.
 - "factor X binds here" or "binding sites" from accessibility alone; that needs ChIP or a footprint.
 - "active enhancer", "activates", "regulates" from openness alone.
 - "the target gene" for the nearest gene.

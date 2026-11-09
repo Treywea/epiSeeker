@@ -59,6 +59,8 @@ for (s in nm) {
     skill_check("input", paste("peak width of", s, "for an accessibility assay"), if (w > 1000) "NOTE" else "PASS",
                 paste0("median ", w, " bp", if (w > 1000) "; wider than usual ATAC/DNase peak calls: broad-mode caller or merged regions?" else ""))
 }
+## the declared assay against ENCODE peak sets (seqAssayQC; partial)
+qc <- range_assay_qc(inp$peaks, inp$txdb, a$assay)
 fr <- NULL
 if (!is.null(a$fragments)) {
     skill_input(a$fragments, "fragments")
@@ -69,6 +71,7 @@ if (!is.null(a$fragments)) {
 
 ## ---- 2. analysis with epiSeeker functions (correctness checks of each annotation inside) ----
 anno <- range_annotate(inp$peaks, inp$txdb, a$annodb, tss, allow_suspect = a$allow_suspect)
+anno <- range_keep_assay_qc(anno, qc)
 range_profile(inp$peaks, inp$txdb, tss, tss, "tss_profile.pdf")
 fq <- NULL
 if (!is.null(fr)) {
@@ -97,6 +100,7 @@ prom <- range_promoter_pct(anno)
 dist <- vapply(nm, function(s) stats::median(abs(as.data.frame(anno[[s]])$distanceToTSS)), 0)
 sec <- list(
     "Input" = range_input_section(inp, anno, a),
+    "Assay label" = range_assay_section(qc),
     "Accessibility" = c(paste0("- ", nm, ": ", sprintf("%.1f", prom), "% in promoters (+/-", tss,
                                " bp); median |distance to TSS| ", dist, " bp"),
                         "- tables/annotation_stat.tsv, figures/annotation_bar.pdf, distance_to_tss.pdf, tss_profile.pdf"),
@@ -113,10 +117,11 @@ sec <- list(
 res <- skill_interpret(anno[[1]], model = a$model, context = a$context, assay = a$assay,
                        question = a$question, overlap = ov)
 skill_flag_phrases(res, c(
+    "assay label called verified" = "\\b(assay|label)\\b[^.]{0,60}\\b(verified|confirmed|validated)\\b",
     "binding from accessibility" = "\\b(binds?|bound by|occupied by|binding sites?)\\b",
     "activity from accessibility" = "\\b(active enhancers?|activates|regulates|drives|controls)\\b",
     "nearest gene called the target" = "\\btarget genes?\\b|\\bis the target\\b"))
 skill_report("range-atac report", sec)
-saveRDS(list(anno = anno, fragments_qc = fq, overlap = ov), skill_path("provenance", "objects.rds"))
+saveRDS(list(anno = anno, fragments_qc = fq, overlap = ov, assay_qc = qc), skill_path("provenance", "objects.rds"))
 skill_finish()
 message("range-atac done: ", skill_path("report", "report.md"))

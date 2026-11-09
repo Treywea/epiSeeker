@@ -19,6 +19,14 @@ script `scripts/run_range_histone.R` runs the steps below; prefer it. The steps 
    means the peaks were called in narrow mode (as the ENCODE histone pipeline does): say so; the
    domains below are built by merging. Broad-mode calls (`.broadPeak`, SICER, epic2) need less
    merging.
+4. **Assay label** (`--assay`): `seqAssayQC(annotateSeq(peaks, TxDb =), assay)` compares the
+   promoter fraction (<= 1 kb), median width and gene-body fraction with ENCODE peak sets of that
+   assay (`tables/assay_qc.tsv`). A flag is a WARN with its reasons (and the ENCODE classes the
+   profile fits): check the label before going on. **The check is partial**: on held-out ENCODE
+   files it flagged 3.6% of correctly labelled sets but only 59% of narrow <-> broad swaps, and
+   none of the broad marks declared as TF. No flag is a NOTE "not contradicted", not a PASS:
+   never write that the assay was verified or confirmed. It runs on the peaks, before they are merged into domains. The result is kept in
+   `annoChecks(anno)$assay`, so `interpret(assay =)` reports the same one.
 
 ## 2. Analysis (epiSeeker functions only)
 - `readPeakFile()`; domains = peaks merged within `--merge_gap` bp (default 5000;
@@ -47,11 +55,12 @@ sites. Without a model the step is skipped and the report says so. A call counts
 
 ## 5. Provenance and outputs
 `figures/` (annotation_bar, distance_to_tss, tss_profile_wide, gene_body_profile), `tables/`
-(domains_summary, domains_<set>, annotation_<set>, annotation_stat, genes_under_domains, overlap),
+(assay_qc, domains_summary, domains_<set>, annotation_<set>, annotation_stat, genes_under_domains, overlap),
 `report/report.md`, `provenance/` (run.txt, checks.tsv, sessionInfo.txt, interpret_provenance.txt,
 objects.rds).
 
 ## Do not say
+- "the assay / label was verified (confirmed) by the QC": seqAssayQC() can only flag, and misses many mislabels.
 - Motifs, binding sites, "X binds": a histone mark is not a factor (flagged as "TF-style claim").
 - "the mark represses / silences / activates gene Y": coverage is not regulation.
 - "the target gene" of a domain; it is a gene under (or nearest to) the domain.

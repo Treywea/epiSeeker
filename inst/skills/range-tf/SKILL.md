@@ -23,6 +23,15 @@ Broad histone marks (H3K27me3, H3K36me3, H3K9me3) go to `range-histone`, ATAC / 
 4. **Assay.** TF peaks are narrow: the median peak width of 20 ENCODE TF ChIP-seq sets was
    184-556 bp. A median far above that suggests a broad mark; say so instead of going on.
    Promoter fraction does not tell TFs apart (25-92% in the same 20 sets).
+5. **Assay label** (`--assay`): `seqAssayQC(annotateSeq(peaks, TxDb =), assay)` compares the
+   promoter fraction (<= 1 kb), median width and gene-body fraction with ENCODE peak sets of that
+   assay (`tables/assay_qc.tsv`). A flag is a WARN with its reasons (and the ENCODE classes the
+   profile fits): check the label before going on. **The check is partial**: on held-out ENCODE
+   files it flagged 3.6% of correctly labelled sets but only 59% of narrow <-> broad swaps, and
+   none of the broad marks declared as TF. No flag is a NOTE "not contradicted", not a PASS:
+   never write that the assay was verified or confirmed. For TF it cannot see a broad mark declared as TF; the width
+   check above sometimes can. The result is kept in
+   `annoChecks(anno)$assay`, so `interpret(assay =)` reports the same one.
 
 ## 2. Analysis (epiSeeker functions only)
 - `readPeakFile()` each file; `annotateSeq(peak, TxDb =, annoDb =, tssRegion = c(-3000, 3000))`.
@@ -66,7 +75,7 @@ one structured call and records it in `clusterProfiler::provenance(res)`.
   configure.
 
 ## 5. Provenance and outputs
-`--out` gets `figures/`, `tables/` (annotation, annotation_stat, overlap), `report/` (report.md
+`--out` gets `figures/`, `tables/` (assay_qc, annotation, annotation_stat, overlap), `report/` (report.md
 with the check table; interpretation.txt and evidence_digest.txt when interpret() ran) and
 `provenance/` (run.txt: arguments, input md5s, package versions, notes, warnings, output md5s;
 checks.tsv; sessionInfo.txt; interpret_provenance.txt; objects.rds).
@@ -77,6 +86,7 @@ checks.tsv; sessionInfo.txt; interpret_provenance.txt; objects.rds).
 - "the overlap proves / confirms the factor"; promoter-rich reference sets overlap any promoter-rich query.
 - Any p-value from an overlap test without a background, or a ranking by p-value.
 - Anything about genes or distributions when the build check fired.
+- "the assay / label was verified (confirmed) by the QC": seqAssayQC() can only flag, and misses many mislabels.
 
 ## Run it
 ```sh
